@@ -5,7 +5,7 @@
 
 [Setup]
 AppName=findash
-AppVersion=1.0.3
+AppVersion=1.0.4
 AppPublisher=findash
 DefaultDirName={autopf}\findash
 DefaultGroupName=findash
@@ -35,3 +35,7 @@ Name: "{userdesktop}\findash"; Filename: "{app}\findash.exe"; IconFilename: "{ap
 
 [Run]
 Filename: "{app}\findash.exe"; Description: "Launch findash"; Flags: nowait postinstall skipifsilent
+; Silent WinSparkle updates skip the postinstall entry above (skipifsilent),
+; and WinSparkle doesn't relaunch the app itself — so relaunch findash here
+; whenever the install runs silently (i.e. an auto-update).
+Filename: "{app}\findash.exe"; Flags: nowait; Check: WizardSilent

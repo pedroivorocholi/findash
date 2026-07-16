@@ -112,7 +112,7 @@ Add a **new `<item>` at the top** (keep older ones for history):
     url="https://github.com/your-username/findash/releases/download/v1.1.0/findash-setup.exe"
     sparkle:version="1.1.0"
     sparkle:os="windows"
-    sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
+    sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
     length="PASTE_LENGTH"
     sparkle:edSignature="PASTE_SIGNATURE"
     type="application/octet-stream" />
@@ -124,8 +124,13 @@ Add a **new `<item>` at the top** (keep older ones for history):
 - `pubDate` in RFC-822 (e.g. `date -R`).
 - **`sparkle:installerArguments` is required** — it makes WinSparkle run the
   Inno installer silently instead of showing the full setup wizard. `/VERYSILENT`
-  hides the UI; `/FORCECLOSEAPPLICATIONS` + `/RESTARTAPPLICATIONS` let it replace
-  and relaunch a running findash. Omit it and every update pops the full wizard.
+  hides the UI; `/FORCECLOSEAPPLICATIONS` closes a running findash so its files
+  can be replaced. Omit it and every update pops the full wizard.
+- **Relaunch** is handled by the installer, not the appcast: `installer.iss`
+  has a `[Run] … Check: WizardSilent` entry that starts findash after a silent
+  install (WinSparkle does not relaunch the app itself, and `/RESTARTAPPLICATIONS`
+  is unreliable because the app exits before the installer's restart-manager
+  phase). Don't add `/RESTARTAPPLICATIONS` — it can cause a double launch.
 
 ### 5. Publish the GitHub release
 
