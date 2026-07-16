@@ -20,93 +20,20 @@
     <language>en</language>
 
     <item>
-      <title>findash 1.0.5</title>
-      <description><![CDATA[
-        <ul>
-          <li>Faster startup and reliable auto-update relaunch (one-folder build).</li>
-        </ul>
-      ]]></description>
-      <pubDate>Thu, 16 Jul 2026 15:45:00 +0000</pubDate>
-      <enclosure
-        url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.5/findash-setup.exe"
-        sparkle:version="1.0.5"
-        sparkle:os="windows"
-        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
-        length="72290934"
-        sparkle:edSignature="BL9NGR3PG6oqBGQUHhvJSbbR3cxvjmkmVbWzftej50kmK7Ddi4nvHB+EPqCmKpyc2aCjtY/PEyQUVJOdnI1HDA=="
-        type="application/octet-stream" />
-    </item>
-
-    <item>
-      <title>findash 1.0.4</title>
-      <description><![CDATA[
-        <ul>
-          <li>Auto-updates now relaunch findash automatically after installing (no manual reopen).</li>
-        </ul>
-      ]]></description>
-      <pubDate>Thu, 16 Jul 2026 14:15:00 +0000</pubDate>
-      <enclosure
-        url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.4/findash-setup.exe"
-        sparkle:version="1.0.4"
-        sparkle:os="windows"
-        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
-        length="102062669"
-        sparkle:edSignature="laKE4QMXEC/mCeDVVwAFczs48USFvQsijj9zmFvo+TZiikh5jwBe/WOu6RqMp5vAnWhKA2H1m8fP2BUyLDLpDQ=="
-        type="application/octet-stream" />
-    </item>
-
-    <item>
-      <title>findash 1.0.3</title>
-      <description><![CDATA[
-        <ul>
-          <li>Now checks for updates on every startup (shows the update dialog automatically when a new version is available).</li>
-        </ul>
-      ]]></description>
-      <pubDate>Thu, 16 Jul 2026 13:30:00 +0000</pubDate>
-      <enclosure
-        url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.3/findash-setup.exe"
-        sparkle:version="1.0.3"
-        sparkle:os="windows"
-        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
-        length="102061658"
-        sparkle:edSignature="7OZJrKIJEI+MVV6Lf78lQ9nGWSnqB/dP0SulDeZhnYT5tmiu5j3gBtLouuEkMVT1gDyQnDdYh9hWOK+OszXSDA=="
-        type="application/octet-stream" />
-    </item>
-
-    <item>
-      <title>findash 1.0.1</title>
-      <description><![CDATA[
-        <ul>
-          <li>Auto-update test release — verifies the WinSparkle update path end to end.</li>
-          <li>Version bump visible in Help &gt; About.</li>
-        </ul>
-      ]]></description>
-      <pubDate>Thu, 16 Jul 2026 12:55:00 +0000</pubDate>
-      <enclosure
-        url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.1/findash-setup.exe"
-        sparkle:version="1.0.1"
-        sparkle:os="windows"
-        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
-        length="102061397"
-        sparkle:edSignature="qhbmORtUSHs6HuGa9f6PkIB14uQJqqb9JwPGT4ePgrVd2rcGFoq0KlOi1igymxDvm6Rs+S/2GG8CBw+qUzfZDQ=="
-        type="application/octet-stream" />
-    </item>
-
-    <item>
       <title>findash 1.0.0</title>
       <description><![CDATA[
         <ul>
           <li>Initial release.</li>
         </ul>
       ]]></description>
-      <pubDate>Thu, 16 Jul 2026 12:40:00 +0000</pubDate>
+      <pubDate>Thu, 16 Jul 2026 16:00:00 +0000</pubDate>
       <enclosure
         url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.0/findash-setup.exe"
         sparkle:version="1.0.0"
         sparkle:os="windows"
-        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
-        length="102060065"
-        sparkle:edSignature="vMpqVQvdIH8MsSaNV16N5WNSA/rowMJGlZhx2NsIfByOpZT66wUfOhq7mn/Na7Dvt7ZswSfqk6bt8zQmQET0Cg=="
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="72293024"
+        sparkle:edSignature="PBNHsL8BBmNHxNzKEPIiM0ZQVVNCRV7UYl24UQWyhso2RORGS1/3E2ECy9UIoc9wceVd+D/E1zACINjxYS80Cg=="
         type="application/octet-stream" />
     </item>
 
