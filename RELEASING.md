@@ -112,6 +112,7 @@ Add a **new `<item>` at the top** (keep older ones for history):
     url="https://github.com/your-username/findash/releases/download/v1.1.0/findash-setup.exe"
     sparkle:version="1.1.0"
     sparkle:os="windows"
+    sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
     length="PASTE_LENGTH"
     sparkle:edSignature="PASTE_SIGNATURE"
     type="application/octet-stream" />
@@ -121,6 +122,10 @@ Add a **new `<item>` at the top** (keep older ones for history):
 - `sparkle:version` must equal `__version__`.
 - `url` must match the release tag you create in the next step.
 - `pubDate` in RFC-822 (e.g. `date -R`).
+- **`sparkle:installerArguments` is required** — it makes WinSparkle run the
+  Inno installer silently instead of showing the full setup wizard. `/VERYSILENT`
+  hides the UI; `/FORCECLOSEAPPLICATIONS` + `/RESTARTAPPLICATIONS` let it replace
+  and relaunch a running findash. Omit it and every update pops the full wizard.
 
 ### 5. Publish the GitHub release
 
