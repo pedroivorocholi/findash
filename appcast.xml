@@ -20,6 +20,24 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.0.1</title>
+      <description><![CDATA[
+        <ul>
+          <li>Auto-update test release — verifies the WinSparkle update path end to end.</li>
+          <li>Version bump visible in Help &gt; About.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Thu, 16 Jul 2026 12:55:00 +0000</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.1/findash-setup.exe"
+        sparkle:version="1.0.1"
+        sparkle:os="windows"
+        length="102061397"
+        sparkle:edSignature="qhbmORtUSHs6HuGa9f6PkIB14uQJqqb9JwPGT4ePgrVd2rcGFoq0KlOi1igymxDvm6Rs+S/2GG8CBw+qUzfZDQ=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.0.0</title>
       <description><![CDATA[
         <ul>
