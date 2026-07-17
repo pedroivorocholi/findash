@@ -1,11 +1,11 @@
-; Inno Setup script — wraps dist\findash.exe into findash-setup.exe.
+﻿; Inno Setup script â€” wraps dist\findash.exe into findash-setup.exe.
 ; Build the exe first (see BUILD.md), then compile this with Inno Setup.
 
 #define AppId "findash.terminal.desktop.1"
 
 [Setup]
 AppName=findash
-AppVersion=1.0.2
+AppVersion=1.0.3
 AppPublisher=findash
 DefaultDirName={autopf}\findash
 DefaultGroupName=findash
@@ -49,7 +49,7 @@ begin
   // relaunch has to WAIT: launched the instant the update finishes, the freshly
   // written numpy C-extension DLLs aren't fully in place yet and the app crashes
   // with "Importing the numpy C-extensions failed". A brief pause lets the file
-  // replacement settle — a normal (slightly later) launch already works fine.
+  // replacement settle â€” a normal (slightly later) launch already works fine.
   if (CurStep = ssPostInstall) and WizardSilent() then
   begin
     Sleep(6000);

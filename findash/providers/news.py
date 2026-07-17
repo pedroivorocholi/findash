@@ -1,21 +1,149 @@
 """News provider: ``news:SYM`` via a source waterfall (adapted from Fincept).
 
-Order: NewsAPI.org (if NEWSAPI_KEY is set) -> gnews package -> yfinance
-Ticker.news as a last resort. Each source is best-effort; failures fall
-through to the next source rather than failing the topic.
+Order: publisher RSS feeds (Fincept's default-feed approach, free and
+keyless) -> NewsAPI.org (if NEWSAPI_KEY is set) -> gnews package ->
+yfinance Ticker.news as a last resort. RSS results are only accepted when
+enough headlines match the symbol/query; otherwise the fetch falls through
+to the next source, so thin RSS matches never mask the older sources.
 """
 
 from __future__ import annotations
 
 import os
+import re
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Optional
+from xml.etree import ElementTree
 
 import requests
 
 from ..datahub import DataHub, Provider
 
 MAX_ITEMS = 25
+
+# Curated market-focused subset of Fincept Terminal's default RSS feeds
+# (research/fincept-terminal .../NewsService_Feeds.cpp): free, no key.
+RSS_FEEDS: list[tuple[str, str, str]] = [
+    # (publisher, url, category)
+    ("Bloomberg", "https://feeds.bloomberg.com/markets/news.rss", "markets"),
+    ("WSJ", "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", "markets"),
+    ("MarketWatch", "https://feeds.marketwatch.com/marketwatch/topstories/", "markets"),
+    (
+        "CNBC",
+        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114",
+        "markets",
+    ),
+    ("Seeking Alpha", "https://seekingalpha.com/market_currents.xml", "markets"),
+    ("BBC", "http://feeds.bbci.co.uk/news/business/rss.xml", "markets"),
+    ("Investing.com", "https://www.investing.com/rss/news.rss", "markets"),
+    ("Benzinga", "https://www.benzinga.com/feed", "markets"),
+    ("OilPrice", "https://oilprice.com/rss/main", "energy"),
+    ("FXStreet", "https://www.fxstreet.com/rss/news", "forex"),
+]
+
+RSS_CACHE_TTL = 180.0  # seconds; keeps feed polling polite across panels
+RSS_FETCH_TIMEOUT = 6.0
+RSS_MIN_MATCHES = 5  # fewer matches than this -> fall through to next source
+_RSS_HEADERS = {"User-Agent": "Mozilla/5.0 (findash RSS reader)"}
+
+_rss_lock = threading.Lock()
+_rss_cache: dict[str, Any] = {"ts": 0.0, "items": []}
+
+
+def _parse_feed_datetime(value: str) -> Optional[datetime]:
+    """RSS pubDate is RFC-2822, Atom updated is ISO-8601; try both."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    dt: Optional[datetime] = None
+    try:
+        dt = parsedate_to_datetime(text)
+    except (TypeError, ValueError):
+        try:
+            dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if dt is not None and dt.tzinfo is None:  # keep sort keys comparable
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _parse_feed_xml(xml_text: str, publisher: str, category: str) -> list[dict]:
+    """Extract items from RSS 2.0 or Atom XML; malformed feeds yield []."""
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError:
+        return []
+    items: list[dict] = []
+
+    for item in root.iter("item"):  # RSS 2.0
+        title = (item.findtext("title") or "").strip()
+        if not title:
+            continue
+        items.append(
+            {
+                "title": title,
+                "publisher": publisher,
+                "url": (item.findtext("link") or "").strip(),
+                "published": (item.findtext("pubDate") or "").strip(),
+                "category": category,
+            }
+        )
+
+    atom = "{http://www.w3.org/2005/Atom}"
+    for entry in root.iter(f"{atom}entry"):  # Atom
+        title = (entry.findtext(f"{atom}title") or "").strip()
+        if not title:
+            continue
+        url = ""
+        link = entry.find(f"{atom}link")
+        if link is not None:
+            url = (link.get("href") or "").strip()
+        published = (
+            entry.findtext(f"{atom}published") or entry.findtext(f"{atom}updated") or ""
+        ).strip()
+        items.append(
+            {
+                "title": title,
+                "publisher": publisher,
+                "url": url,
+                "published": published,
+                "category": category,
+            }
+        )
+    return items
+
+
+def _fetch_one_feed(feed: tuple[str, str, str]) -> list[dict]:
+    publisher, url, category = feed
+    try:
+        resp = requests.get(url, headers=_RSS_HEADERS, timeout=RSS_FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return _parse_feed_xml(resp.text, publisher, category)
+    except Exception:
+        return []  # dead/slow feeds must not break the rest
+
+
+def _rss_items() -> list[dict]:
+    """All items across RSS_FEEDS, newest first, cached for RSS_CACHE_TTL."""
+    with _rss_lock:
+        if time.monotonic() - _rss_cache["ts"] < RSS_CACHE_TTL:
+            return _rss_cache["items"]
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(_fetch_one_feed, RSS_FEEDS))
+    items = [item for feed_items in results for item in feed_items]
+    epoch = datetime.fromtimestamp(0, tz=timezone.utc)
+    items.sort(
+        key=lambda i: _parse_feed_datetime(i["published"]) or epoch, reverse=True
+    )
+    with _rss_lock:
+        _rss_cache["ts"] = time.monotonic()
+        _rss_cache["items"] = items
+    return items
 
 
 class NewsProvider(Provider):
@@ -41,7 +169,9 @@ class NewsProvider(Provider):
     def _fetch(self, topic: str, symbol: str) -> None:
         hub = DataHub.instance()
         try:
-            items = self._from_newsapi(symbol)
+            items = self._from_rss_symbol(symbol)
+            if items is None:
+                items = self._from_newsapi(symbol)
             if items is None:
                 items = self._from_gnews(symbol)
             if items is None:
@@ -57,7 +187,9 @@ class NewsProvider(Provider):
         (yfinance's ``Ticker.news`` is symbol-only, not a text search)."""
         hub = DataHub.instance()
         try:
-            items = self._from_newsapi(query)
+            items = self._from_rss_query(query)
+            if items is None:
+                items = self._from_newsapi(query)
             if items is None:
                 items = self._from_gnews_query(query)
             if items is None:
@@ -67,6 +199,45 @@ class NewsProvider(Provider):
             hub.publish_error(topic, f"news query fetch failed: {exc}")
 
     # -- sources -------------------------------------------------------
+
+    @staticmethod
+    def _strip_category(items: list[dict]) -> list[dict]:
+        """Drop the internal 'category' key so published payloads keep the
+        same shape as the other sources (title/publisher/url/published)."""
+        return [{k: v for k, v in i.items() if k != "category"} for i in items]
+
+    def _from_rss_symbol(self, symbol: str) -> Optional[list[dict]]:
+        """Headlines mentioning the ticker as a standalone word (case-
+        sensitive: 'AAPL' matches, 'aapl' inside a word doesn't). Recall is
+        deliberately conservative — most symbols fall through to the
+        broader sources below."""
+        try:
+            pattern = re.compile(rf"\b{re.escape(symbol)}\b")
+            matches = [i for i in _rss_items() if pattern.search(i["title"])]
+            if len(matches) < RSS_MIN_MATCHES:
+                return None
+            return self._strip_category(matches)
+        except Exception:
+            return None
+
+    def _from_rss_query(self, query: str) -> Optional[list[dict]]:
+        """Headlines where every query word appears in the title, or where
+        the query names a feed category (e.g. the Topic News default
+        'markets' pulls the whole markets feed set)."""
+        try:
+            tokens = [t for t in query.lower().split() if t]
+            if not tokens:
+                return None
+            matches = []
+            for item in _rss_items():
+                title = item["title"].lower()
+                if all(t in title for t in tokens) or query.lower() == item["category"]:
+                    matches.append(item)
+            if len(matches) < RSS_MIN_MATCHES:
+                return None
+            return self._strip_category(matches)
+        except Exception:
+            return None
 
     def _from_newsapi(self, symbol: str) -> Optional[list[dict]]:
         api_key = os.environ.get("NEWSAPI_KEY")

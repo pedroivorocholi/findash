@@ -1,18 +1,27 @@
-"""Market data provider: quotes, OHLCV history, and analyst ratings via yfinance.
+"""Market data provider: quotes, OHLCV history, and analyst ratings.
 
-Handles three topic families in one provider so a single ``yf.Tickers`` batch
-call can serve many ``quote:*`` topics at once. ``history:*`` and
-``analyst:*`` topics are fetched one job per topic (their parameters vary
-per-topic, so batching wouldn't help).
+Quotes try keyed sources first when the user has set an API key —
+Finnhub (FINNHUB_API_KEY) then Twelve Data (TWELVEDATA_API_KEY) — and fall
+back to yfinance for anything they can't serve. Without keys, behavior is
+unchanged: everything comes from yfinance. Free tiers: Finnhub ~60 req/min
+(marketed as real-time US quotes, unverified); Twelve Data 8 credits/min,
+partial-coverage real-time. yfinance has no freshness guarantee.
+
+``history:*`` and ``analyst:*`` topics are yfinance-only and fetched one
+job per topic (their parameters vary per-topic, so batching wouldn't help).
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any, Optional
 
+import requests
 import yfinance as yf
 
 from ..datahub import DataHub, Provider
+
+QUOTE_HTTP_TIMEOUT = 6.0
 
 
 def _as_float(x: Any) -> Optional[float]:
@@ -96,9 +105,22 @@ class MarketProvider(Provider):
     # -- quotes --------------------------------------------------------
 
     def _fetch_quotes(self, symbols: list[str]) -> None:
-        """One job, one yf.Tickers batch call, per-symbol try/except so a
-        single bad symbol doesn't fail the whole batch."""
+        """Keyed sources first (per-symbol), then one yf.Tickers batch call
+        for the rest, per-symbol try/except so a single bad symbol doesn't
+        fail the whole batch."""
         hub = DataHub.instance()
+
+        remaining: list[str] = []
+        for sym in symbols:
+            quote = self._quote_from_finnhub(sym) or self._quote_from_twelvedata(sym)
+            if quote is not None:
+                hub.publish(f"quote:{sym}", quote)
+            else:
+                remaining.append(sym)
+        symbols = remaining
+        if not symbols:
+            return
+
         try:
             batch = yf.Tickers(" ".join(symbols))
         except Exception as exc:
@@ -113,6 +135,85 @@ class MarketProvider(Provider):
                 hub.publish(topic, self._build_quote(sym, tkr))
             except Exception as exc:
                 hub.publish_error(topic, f"quote fetch failed: {exc}")
+
+    def _quote_from_finnhub(self, symbol: str) -> Optional[dict]:
+        """Finnhub /quote (only when FINNHUB_API_KEY is set). Payload has no
+        name/currency/volume; name falls back to the symbol. Any failure or
+        unknown symbol (Finnhub returns zeros) yields None to fall through."""
+        api_key = os.environ.get("FINNHUB_API_KEY")
+        if not api_key:
+            return None
+        try:
+            resp = requests.get(
+                "https://finnhub.io/api/v1/quote",
+                params={"symbol": symbol, "token": api_key},
+                timeout=QUOTE_HTTP_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            price = _as_float(data.get("c"))
+            prev_close = _as_float(data.get("pc"))
+            if not price and not prev_close:  # unknown symbol -> all zeros
+                return None
+            change = _as_float(data.get("d"))
+            change_pct = _as_float(data.get("dp"))
+            if change is None and price is not None and prev_close:
+                change = price - prev_close
+                change_pct = (change / prev_close) * 100.0
+            return {
+                "symbol": symbol,
+                "name": symbol,
+                "price": price,
+                "change": change,
+                "change_pct": change_pct,
+                "prev_close": prev_close,
+                "volume": None,
+                "currency": None,
+                "day_high": _as_float(data.get("h")),
+                "day_low": _as_float(data.get("l")),
+            }
+        except Exception:
+            return None
+
+    def _quote_from_twelvedata(self, symbol: str) -> Optional[dict]:
+        """Twelve Data /quote (only when TWELVEDATA_API_KEY is set). Error
+        responses carry a 'code' field; anything unusable yields None."""
+        api_key = os.environ.get("TWELVEDATA_API_KEY")
+        if not api_key:
+            return None
+        try:
+            resp = requests.get(
+                "https://api.twelvedata.com/quote",
+                params={"symbol": symbol, "apikey": api_key},
+                timeout=QUOTE_HTTP_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not isinstance(data, dict) or "code" in data:
+                return None
+            price = _as_float(data.get("close"))
+            prev_close = _as_float(data.get("previous_close"))
+            if price is None:
+                return None
+            change = _as_float(data.get("change"))
+            change_pct = _as_float(data.get("percent_change"))
+            if change is None and prev_close:
+                change = price - prev_close
+                change_pct = (change / prev_close) * 100.0
+            return {
+                "symbol": symbol,
+                "name": str(data.get("name") or symbol),
+                "price": price,
+                "change": change,
+                "change_pct": change_pct,
+                "prev_close": prev_close,
+                "volume": _as_int(data.get("volume")),
+                "currency": str(data["currency"]) if data.get("currency") else None,
+                "day_high": _as_float(data.get("high")),
+                "day_low": _as_float(data.get("low")),
+            }
+        except Exception:
+            return None
 
     def _build_quote(self, symbol: str, tkr: Any) -> dict:
         price = prev_close = day_high = day_low = volume = currency = None

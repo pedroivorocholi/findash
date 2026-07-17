@@ -20,6 +20,26 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.0.3</title>
+      <description><![CDATA[
+        <ul>
+          <li>News: headlines now come from major publisher feeds first (Bloomberg, WSJ, MarketWatch, CNBC, and more) — fresher and broader than before, with the previous sources kept as fallback.</li>
+          <li>News: the feed is now sorted — headlines mentioning your active symbol rise to the top, newest first within each group.</li>
+          <li>Quotes: optional Finnhub / Twelve Data sources via FINNHUB_API_KEY / TWELVEDATA_API_KEY in .env; without keys, quotes work exactly as before.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Fri, 17 Jul 2026 15:37:19 +0000</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.0.3/findash-setup.exe"
+        sparkle:version="1.0.3"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="70728409"
+        sparkle:edSignature="vT/rw0bq7Jm3pphXFWFJHzuP2aR3eFpjWgZLbxLyTyqjKQlcmMfWRJwjb5vHiqb0yxEvFRnlBj7AKd5S6YANCg=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.0.2</title>
       <description><![CDATA[
         <ul>

@@ -6,6 +6,7 @@ Underscore-prefixed so ``discover_panels`` skips it (it registers no panel).
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Optional
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
+from ..symbol_context import GROUPS, SymbolContext
 from ..theme import ACCENT
 
 
@@ -80,10 +82,33 @@ def make_news_table(parent) -> QTableWidget:
     return table
 
 
+def sort_news_items(items: list) -> list:
+    """Ranking rule (user-approved): relevance tier first, then recency.
+
+    Tier 1 — headline mentions an active linked symbol (word-boundary,
+    case-sensitive ticker match across all link groups); Tier 2 — the rest.
+    Within each tier newest first; items whose timestamp can't be parsed
+    sink to the bottom of their tier.
+    """
+    ctx = SymbolContext.instance()
+    symbols = {s for s in (ctx.symbol(g) for g in GROUPS) if s}
+    patterns = [re.compile(rf"\b{re.escape(s)}\b") for s in symbols]
+
+    def key(entry: Any) -> tuple:
+        title = entry.get("title") or "" if isinstance(entry, dict) else ""
+        tier = 0 if any(p.search(title) for p in patterns) else 1
+        dt = parse_published(entry.get("published")) if isinstance(entry, dict) else None
+        ts = dt.timestamp() if dt is not None else float("-inf")
+        return (tier, -ts)
+
+    return sorted(items, key=key)
+
+
 def populate_news_table(table: QTableWidget, data: Any) -> int:
-    """Fill ``table`` from a list of news dicts. Returns the row count."""
+    """Fill ``table`` from a list of news dicts, sorted per
+    ``sort_news_items``. Returns the row count."""
     table.setRowCount(0)
-    items = data if isinstance(data, list) else []
+    items = sort_news_items(data) if isinstance(data, list) else []
     count = 0
     for entry in items:
         if not isinstance(entry, dict):
