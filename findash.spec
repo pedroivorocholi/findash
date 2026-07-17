@@ -56,6 +56,7 @@ hiddenimports += [
 hiddenimports += [
     "multitasking", "frozendict", "peewee", "platformdirs",
     "websockets", "html5lib", "bs4",
+    "openpyxl",  # imported lazily by the Financials xlsx export
 ]
 
 # Packages with data files or native binaries to bundle fully.

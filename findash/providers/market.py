@@ -14,6 +14,7 @@ job per topic (their parameters vary per-topic, so batching wouldn't help).
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 from typing import Any, Optional
 
 import requests
@@ -283,7 +284,16 @@ class MarketProvider(Provider):
         _, symbol, period, interval = parts
         try:
             tkr = yf.Ticker(symbol)
-            df = tkr.history(period=period, interval=interval)
+            if ".." in period:
+                # explicit date range: "YYYY-MM-DD..YYYY-MM-DD" (end inclusive;
+                # yfinance's end param is exclusive, so push it one day out)
+                start_s, end_s = period.split("..", 1)
+                end_excl = date.fromisoformat(end_s) + timedelta(days=1)
+                df = tkr.history(
+                    start=start_s, end=end_excl.isoformat(), interval=interval
+                )
+            else:
+                df = tkr.history(period=period, interval=interval)
             if df is None or df.empty:
                 hub.publish_error(topic, f"no history data for {symbol}")
                 return

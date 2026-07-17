@@ -20,6 +20,28 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.2.0</title>
+      <description><![CDATA[
+        <ul>
+          <li>Press F5 to force-refresh every live feed at once — quotes, charts, news, financials — with status-bar feedback.</li>
+          <li>Financials: open the company's SEC filings (EDGAR, matched to Annual/Quarterly) or Yahoo Finance; download the displayed statement as a styled Excel workbook or clean CSV; copy it to the clipboard.</li>
+          <li>Chart: candlestick, OHLC bar, line, and area styles; add/remove/recolor indicators (SMA, EMA, Bollinger Bands, VWAP, MACD, RSI, volume); custom colors for candles, line, grid, and background.</li>
+          <li>Chart: pick range and candle interval independently — including a custom date range — with invalid combinations greyed out and explained; export the chart as PNG; everything persists with your layout.</li>
+          <li>The app now launches maximized; volume axis shows compact figures (150M, 2.5B); fixed clipped range/interval button labels.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Fri, 17 Jul 2026 21:08:01 +0000</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.2.0/findash-setup.exe"
+        sparkle:version="1.2.0"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="72836419"
+        sparkle:edSignature="OT7zbjYe4SHP1U2wnjGKEFVsgUc3Rtpuc2Hcl1nc/6+iVDf2gPiIzjsK8JLbXO0BFMUDrRBgHj02stF/JuiBAw=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.1.0</title>
       <description><![CDATA[
         <ul>

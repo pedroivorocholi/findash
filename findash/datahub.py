@@ -146,6 +146,11 @@ class DataHub(QObject):
         for topic in list(self._subs):
             self._subs[topic] = [s for s in self._subs[topic] if s.owner is not owner]
 
+    def subscribed_topics(self) -> list[str]:
+        """Topics with at least one live subscriber (unsubscribe_all leaves
+        empty lists behind, hence the filter)."""
+        return [topic for topic, subs in self._subs.items() if subs]
+
     # -- publishing (provider side; any thread) ----------------------------
 
     def publish(self, topic: str, value: Any) -> None:

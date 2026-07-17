@@ -80,7 +80,9 @@ def main() -> int:
     win = MainWindow()
     if app_icon is not None:
         win.setWindowIcon(app_icon)
-    win.show()
+    # launch filling the screen; the 1500x900 set in MainWindow stays as the
+    # un-maximized size when the user restores the window
+    win.showMaximized()
 
     startup_err = ""
     try:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 import PySide6QtAds as QtAds
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
 )
 
+from .datahub import DataHub
 from .layout_store import LayoutStore
 from .panel import Panel, PanelRegistry
 from .paths import BUNDLE_DIR
@@ -44,6 +46,7 @@ class MainWindow(QMainWindow):
         self._maximized_instance: str | None = None
         self._pre_maximize_state = None  # QByteArray snapshot to restore on exit
         self._maximizing = False  # guard: hiding siblings is not a real close
+        self._last_refresh_all = 0.0  # monotonic timestamp, debounces F5
         self.layout_store = LayoutStore()
 
         # -- command bar (Bloomberg command-line analog): type ticker, Enter
@@ -92,6 +95,7 @@ class MainWindow(QMainWindow):
 
         self._build_menus()
         self._install_fullscreen()
+        self._install_refresh_all()
         self.statusBar().showMessage(
             "Click any ticker — every linked panel follows. Data: Yahoo Finance/Google News (free, delayed)."
         )
@@ -114,6 +118,27 @@ class MainWindow(QMainWindow):
         self._esc_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         self._esc_shortcut.activated.connect(self._exit_maximize)
         self._esc_shortcut.setEnabled(False)
+
+    def _install_refresh_all(self) -> None:
+        """Set up the F5 hotkey: force-refresh every currently-subscribed
+        topic (news, charts, quotes, financials — whatever's live)."""
+        f5 = QAction(self)
+        f5.setShortcut(QKeySequence(Qt.Key.Key_F5))
+        f5.triggered.connect(self._refresh_all)
+        self.addAction(f5)
+
+    def _refresh_all(self) -> None:
+        # debounce: ignore repeat presses within 1.5s of the last accepted one
+        # (DataHub.request already skips in-flight topics; this is just
+        # belt-and-braces against spamming the shortcut).
+        now = time.monotonic()
+        if now - self._last_refresh_all < 1.5:
+            return
+        self._last_refresh_all = now
+        hub = DataHub.instance()
+        topics = hub.subscribed_topics()
+        hub.request(topics, force=True)
+        self.statusBar().showMessage(f"Refreshing {len(topics)} feeds…", 2500)
 
     def _glyph_icon(self, kind: str):
         """Draw a small maximize (single square) or restore (two offset
