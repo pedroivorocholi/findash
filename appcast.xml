@@ -20,6 +20,25 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.2.1</title>
+      <description><![CDATA[
+        <ul>
+          <li>Chart: pick a custom color when adding any indicator (SMA, EMA, Bollinger Bands, VWAP, Volume, RSI, MACD), instead of only an auto-assigned one.</li>
+          <li>Chart: each indicator chip now has a small × button for one-click removal — previously only available via the right-click menu.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Sun, 19 Jul 2026 14:29:23 -0300</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.2.1/findash-setup.exe"
+        sparkle:version="1.2.1"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="72842461"
+        sparkle:edSignature="PntquzXiR1xpUk5jkYVCEF/BNzgOBv/n19lK7VHf2ZmuaW4Td9mZyDj82AGL3k3psdHhPfrJ4PqVzZqT9SHKDQ=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.2.0</title>
       <description><![CDATA[
         <ul>
