@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from ..panel import Panel, register_panel
@@ -195,6 +196,7 @@ class _IndicatorInstance:
         self.color = color
         self.on = on
         self.chip: Optional[QPushButton] = None
+        self.chip_container: Optional[QWidget] = None
         self.pane: Optional[pg.PlotWidget] = None  # osc indicators only
         self.items: list = []       # pg items on the price plot
         self.pane_items: list = []  # pg items inside self.pane
@@ -629,6 +631,21 @@ class ChartPanel(Panel):
         self._palette_iter += 1
         return color
 
+    def _pick_new_indicator_color(self, label: str) -> Optional[str]:
+        """Prompt for a color when adding a new indicator, seeded with the
+        next palette color. Loops on too-dark picks (same rule as
+        recoloring) until a valid color is chosen or the user cancels."""
+        seed = self._next_color()
+        while True:
+            picked = QColorDialog.getColor(QColor(seed), self, f"{label} color")
+            if not picked.isValid():
+                return None
+            if picked.lightness() < 60:
+                self.set_status("⚠ too dark for the black canvas — pick a lighter color")
+                seed = picked.name()
+                continue
+            return picked.name()
+
     def _show_add_menu(self) -> None:
         menu = QMenu(self)
         for kind, spec in INDICATOR_SPECS.items():
@@ -649,7 +666,10 @@ class ChartPanel(Panel):
             if not ok:
                 return
             params["window"] = window
-        self._add_indicator(kind, params)
+        color = self._pick_new_indicator_color(spec.label)
+        if color is None:
+            return
+        self._add_indicator(kind, params, color=color)
 
     def _add_indicator(
         self, kind: str, params: dict,
@@ -664,6 +684,11 @@ class ChartPanel(Panel):
             self._maybe_widen_fetch()
 
     def _build_chip(self, inst: _IndicatorInstance) -> None:
+        container = QWidget(self)
+        row = QHBoxLayout(container)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+
         chip = QPushButton(inst.label(), self)
         chip.setCheckable(True)
         chip.setChecked(inst.on)
@@ -673,10 +698,23 @@ class ChartPanel(Panel):
             lambda pos, i=inst: self._show_chip_menu(i, pos)
         )
         chip.setToolTip("Click: toggle · right-click: color / edit / remove")
+        row.addWidget(chip)
+
+        close_btn = QPushButton("×", container)
+        close_btn.setFixedSize(16, 16)
+        close_btn.setToolTip("Remove")
+        close_btn.setStyleSheet(
+            f"QPushButton {{ color: {FG_DIM}; border: none; font-weight: bold; }}"
+            f"QPushButton:hover {{ color: {DOWN}; }}"
+        )
+        close_btn.clicked.connect(lambda: self._remove_indicator(inst))
+        row.addWidget(close_btn)
+
         # insert before the "+" button
         idx = self._chips_row.indexOf(self._add_btn)
-        self._chips_row.insertWidget(idx, chip)
+        self._chips_row.insertWidget(idx, container)
         inst.chip = chip
+        inst.chip_container = container
         self._style_chip(inst)
 
     def _style_chip(self, inst: _IndicatorInstance) -> None:
@@ -740,9 +778,9 @@ class ChartPanel(Panel):
 
     def _remove_indicator(self, inst: _IndicatorInstance) -> None:
         self._teardown_indicator_items(inst)
-        if inst.chip is not None:
-            self._chips_row.removeWidget(inst.chip)
-            inst.chip.deleteLater()
+        if inst.chip_container is not None:
+            self._chips_row.removeWidget(inst.chip_container)
+            inst.chip_container.deleteLater()
         self._indicators.remove(inst)
 
     def _maybe_widen_fetch(self) -> None:
