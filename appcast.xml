@@ -20,6 +20,24 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.2.2</title>
+      <description><![CDATA[
+        <ul>
+          <li>Fixed the indicator chip remove button added in 1.2.1, which rendered as an empty box instead of an × on some systems — removal is back to right-click a chip → Remove (also still reachable via Color…/Edit period…).</li>
+        </ul>
+      ]]></description>
+      <pubDate>Sun, 19 Jul 2026 14:45:31 -0300</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.2.2/findash-setup.exe"
+        sparkle:version="1.2.2"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="72836118"
+        sparkle:edSignature="G8YUIBYMLyD6KZB/pTEghkj0yxL2MayPnt1i/HJhIUN7JsT1pqMU3rGNY6AxcaM8K5bqVeVRBruP5J0UW7qqDw=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.2.1</title>
       <description><![CDATA[
         <ul>
