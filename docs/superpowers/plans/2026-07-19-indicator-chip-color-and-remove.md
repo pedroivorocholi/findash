@@ -28,7 +28,7 @@
 - Consumes: `self._next_color() -> str` (chart.py:627-630, already exists — returns next hex color from `INDICATOR_PALETTE` and advances the rotation), `self.set_status(msg: str) -> None` (existing `Panel` method used elsewhere in this file, e.g. chart.py:721), `INDICATOR_SPECS[kind].label -> str` (existing).
 - Produces: new method `_pick_new_indicator_color(self, label: str) -> Optional[str]` on `ChartPanel`, used only within this file by `_add_indicator_ui`.
 
-- [ ] **Step 1: Add the color-picking helper method**
+- [x] **Step 1: Add the color-picking helper method**
 
 Insert this new method directly after `_next_color` (chart.py:627-630), before `_show_add_menu`:
 
@@ -49,7 +49,7 @@ Insert this new method directly after `_next_color` (chart.py:627-630), before `
             return picked.name()
 ```
 
-- [ ] **Step 2: Wire it into `_add_indicator_ui`**
+- [x] **Step 2: Wire it into `_add_indicator_ui`**
 
 Replace the current body of `_add_indicator_ui` (chart.py:641-652):
 
@@ -88,7 +88,7 @@ with:
         self._add_indicator(kind, params, color=color)
 ```
 
-- [ ] **Step 3: Manually verify**
+- [x] **Step 3: Manually verify**
 
 Run: `.venv\Scripts\python -m findash`
 
@@ -103,7 +103,7 @@ In the running app, open the Chart panel for any symbol and, for each of the fol
 
 Expected: all six behave as described, no exceptions in the console.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add findash/panels/chart.py
@@ -124,7 +124,7 @@ git commit -m "feat: let user pick indicator color when adding it to the chart"
 - Consumes: `self._chips_row: QHBoxLayout` (existing, chart.py:469), `self._add_btn: QPushButton` (existing, chart.py:470-473), `self._style_chip(inst) -> None` (existing, chart.py:682-692), `self._show_chip_menu(inst, pos) -> None` (existing, chart.py:694-707), `self._on_chip_toggled(inst, checked) -> None` (existing, chart.py:709-714), `self._remove_indicator(inst) -> None` (this task modifies it), theme constants `FG_DIM`, `DOWN` (already imported, chart.py:32).
 - Produces: `_IndicatorInstance.chip_container: Optional[QWidget]` — new field other tasks/future code can rely on to find the chip's wrapper widget; `inst.chip` keeps its existing meaning (the label/toggle button itself) so `_style_chip`, `_edit_indicator`, `_show_chip_menu` need no changes.
 
-- [ ] **Step 1: Add `QWidget` to the imports**
+- [x] **Step 1: Add `QWidget` to the imports**
 
 In the `from PySide6.QtWidgets import (...)` block (chart.py:17-29), add `QWidget` after `QVBoxLayout`:
 
@@ -145,7 +145,7 @@ from PySide6.QtWidgets import (
 )
 ```
 
-- [ ] **Step 2: Add the `chip_container` field**
+- [x] **Step 2: Add the `chip_container` field**
 
 In `_IndicatorInstance.__init__` (chart.py:191-201), add a line right after `self.chip`:
 
@@ -163,7 +163,7 @@ In `_IndicatorInstance.__init__` (chart.py:191-201), add a line right after `sel
         self.pane_items: list = []  # pg items inside self.pane
 ```
 
-- [ ] **Step 3: Rebuild `_build_chip` to wrap the toggle button and a × button in a container**
+- [x] **Step 3: Rebuild `_build_chip` to wrap the toggle button and a × button in a container**
 
 Replace the current `_build_chip` (chart.py:666-680):
 
@@ -223,7 +223,7 @@ with:
         self._style_chip(inst)
 ```
 
-- [ ] **Step 4: Update `_remove_indicator` to remove the container**
+- [x] **Step 4: Update `_remove_indicator` to remove the container**
 
 Replace the current `_remove_indicator` (chart.py:741-746):
 
@@ -247,7 +247,7 @@ with:
         self._indicators.remove(inst)
 ```
 
-- [ ] **Step 5: Manually verify**
+- [x] **Step 5: Manually verify**
 
 Run: `.venv\Scripts\python -m findash`
 
@@ -262,7 +262,7 @@ In the running app, open the Chart panel for any symbol:
 
 Expected: all six behave as described, no exceptions in the console, no leftover chip artifacts in the INDICATORS row after removal.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add findash/panels/chart.py
