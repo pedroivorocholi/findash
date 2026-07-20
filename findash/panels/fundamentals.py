@@ -12,7 +12,6 @@ import pandas as pd
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QApplication,
     QButtonGroup,
     QFileDialog,
@@ -20,10 +19,10 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QMenu,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import DOWN
 
@@ -118,12 +117,8 @@ class FundamentalsPanel(Panel):
         self._update_actions()
 
         # -- table -----------------------------------------------------------
-        self.table = QTableWidget(0, 1, self)
+        self.table = MarketTable(0, 1, self)
         self.table.setHorizontalHeaderLabels(["Line Item"])
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )

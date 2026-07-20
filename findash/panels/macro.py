@@ -13,10 +13,10 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
     QLabel,
-    QTableWidget,
     QTableWidgetItem,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import ACCENT, BG, DOWN, FG_DIM, UP
 
@@ -86,12 +86,10 @@ class MacroPanel(Panel):
         cftc_title.setStyleSheet(f"color: {ACCENT}; font-weight: bold;")
         self.content_layout.addWidget(cftc_title)
 
-        self.cftc_table = QTableWidget(len(CFTC_MARKETS), len(CFTC_HEADERS), self)
+        self.cftc_table = MarketTable(len(CFTC_MARKETS), len(CFTC_HEADERS), self)
         self.cftc_table.setHorizontalHeaderLabels(CFTC_HEADERS)
-        self.cftc_table.verticalHeader().setVisible(False)
-        self.cftc_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        # display-only snapshot — override MarketTable's default row selection
         self.cftc_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.cftc_table.setAlternatingRowColors(True)
         header = self.cftc_table.horizontalHeader()
         header.setSectionResizeMode(COL_MARKET, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(COL_NETSPEC, QHeaderView.ResizeMode.Stretch)

@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self._build_menus()
         self._install_fullscreen()
         self._install_refresh_all()
+        self._install_search_shortcut()
         self.statusBar().showMessage(
             "Click any ticker — every linked panel follows. Data: Yahoo Finance/Google News (free, delayed)."
         )
@@ -126,6 +127,18 @@ class MainWindow(QMainWindow):
         f5.setShortcut(QKeySequence(Qt.Key.Key_F5))
         f5.triggered.connect(self._refresh_all)
         self.addAction(f5)
+
+    def _install_search_shortcut(self) -> None:
+        """Ctrl+F (Cmd+F on macOS): focus the SYMBOL command bar and select its
+        text so typing a new ticker overwrites the old one immediately."""
+        find = QAction(self)
+        find.setShortcut(QKeySequence.StandardKey.Find)
+        find.triggered.connect(self._focus_symbol_search)
+        self.addAction(find)
+
+    def _focus_symbol_search(self) -> None:
+        self._cmd.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self._cmd.selectAll()
 
     def _refresh_all(self) -> None:
         # debounce: ignore repeat presses within 1.5s of the last accepted one
@@ -310,6 +323,11 @@ class MainWindow(QMainWindow):
         self._rebuild_apis_menu()
 
         m_help = self._menubar.addMenu("&Help")
+        a_guide = QAction("Keyboard Shortcuts && Guide…", self)
+        a_guide.setShortcut(QKeySequence.StandardKey.HelpContents)
+        a_guide.triggered.connect(self._show_onboarding)
+        m_help.addAction(a_guide)
+        m_help.addSeparator()
         a_update = QAction("Check for Updates…", self)
         a_update.triggered.connect(self._check_for_updates)
         a_about = QAction("About findash", self)
@@ -386,6 +404,18 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self, "Check for Updates", updater.unavailable_reason()
             )
+
+    def _show_onboarding(self) -> None:
+        from .onboarding_dialog import OnboardingDialog
+
+        OnboardingDialog(self).exec()
+
+    def maybe_show_onboarding(self) -> None:
+        """First launch only (per QSettings flag): show the guide once."""
+        from .onboarding_dialog import OnboardingDialog
+
+        if OnboardingDialog.should_auto_show():
+            OnboardingDialog(self).exec()
 
     def _show_about(self) -> None:
         from . import __version__
@@ -540,14 +570,19 @@ class MainWindow(QMainWindow):
             except (IndexError, ValueError):
                 pass
 
-        panel: Panel = meta.cls()
         try:
+            panel: Panel = meta.cls()
             panel.build()
-        except Exception:
+        except Exception as exc:
             import traceback
 
             traceback.print_exc()
-            return None  # one broken panel must not blank the whole window
+            # one broken panel must not blank the whole window — report it to
+            # the user and skip; the invalid panel never reaches the dock manager
+            self.statusBar().showMessage(
+                f"Couldn't open {meta.title}: {exc}", 6000
+            )
+            return None
         if link_group:
             panel.set_link_group(link_group)
         if settings:

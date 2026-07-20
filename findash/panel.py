@@ -250,6 +250,22 @@ class Panel(QWidget):
     def on_symbol(self, symbol: str) -> None:
         """Active symbol for this panel's link group changed. Optional."""
 
+    def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        """Defensive teardown when the panel's dock closes: release DataHub
+        subscriptions and detach from the SymbolContext singleton so a
+        lingering widget can't keep receiving updates. Docks are
+        DeleteOnClose and Qt already auto-disconnects a bound-method slot when
+        its receiver is destroyed — this is belt-and-braces insurance."""
+        try:
+            self.unsubscribe_all()
+        except Exception:
+            pass
+        try:
+            self._ctx.symbol_changed.disconnect(self._on_ctx_changed)
+        except (RuntimeError, TypeError):
+            pass  # already disconnected / never connected
+        super().closeEvent(event)
+
     def settings(self) -> dict:
         """Per-panel state persisted into the layout file. Optional."""
         return {}

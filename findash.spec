@@ -51,6 +51,13 @@ hiddenimports += [
     "findash.providers.market",
     "findash.providers.news",
 ]
+# Shared UI components (imported by panels) and the onboarding dialog (imported
+# lazily inside app.py). Listed explicitly so the frozen build never misses them.
+hiddenimports += [
+    "findash.components",
+    "findash.components.market_table",
+    "findash.onboarding_dialog",
+]
 
 # yfinance / news deps that static analysis under-collects.
 hiddenimports += [

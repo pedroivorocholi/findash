@@ -10,7 +10,6 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -18,11 +17,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import ACCENT, BG_HEADER, DOWN, FG_DIM, UP
 
@@ -125,13 +124,8 @@ class CommoditiesPanel(Panel):
         self._row_kind: dict[int, tuple[str, str | None]] = {}
         self._row_of_symbol: dict[str, int] = {}
 
-        self.table = QTableWidget(0, len(HEADERS), self)
+        self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setAlternatingRowColors(True)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(COL_NAME, QHeaderView.ResizeMode.ResizeToContents)
         for col in (COL_LAST, COL_CHG, COL_CHGPCT, COL_RANGE):

@@ -8,13 +8,12 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QHeaderView,
     QLabel,
-    QTableWidget,
     QTableWidgetItem,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import ACCENT, DOWN, FG_DIM, UP
 
@@ -48,12 +47,8 @@ class EarningsPanel(Panel):
         self.next_lbl.setStyleSheet(f"color: {ACCENT}; font-weight: bold; font-size: 13px;")
         self.content_layout.addWidget(self.next_lbl)
 
-        self.table = QTableWidget(0, len(HEADERS), self)
+        self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.content_layout.addWidget(self.table, 1)
 

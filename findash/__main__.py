@@ -108,11 +108,16 @@ def main() -> int:
         except OSError:
             pass
 
-    # First run of a new install/version: offer the API-keys dialog (no-op if
-    # keys are already connected). Delayed so the window paints first.
+    # First run: show the onboarding guide once, then offer the API-keys dialog
+    # (both no-ops after first launch / once keys are connected). Delayed so the
+    # window paints first; run sequentially since each dialog is modal.
     from PySide6.QtCore import QTimer
 
-    QTimer.singleShot(600, win.maybe_prompt_api_keys)
+    def _first_run_dialogs() -> None:
+        win.maybe_show_onboarding()
+        win.maybe_prompt_api_keys()
+
+    QTimer.singleShot(600, _first_run_dialogs)
 
     # Auto-update: silent daily check via WinSparkle (Windows only; a no-op if
     # the updater isn't configured/available). Cleaned up after the event loop.

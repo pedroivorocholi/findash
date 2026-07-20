@@ -82,40 +82,55 @@ def make_news_table(parent) -> QTableWidget:
     return table
 
 
-def sort_news_items(items: list) -> list:
-    """Ranking rule (user-approved): relevance tier first, then recency.
+def _ranked_with_dates(items: list) -> list[tuple[dict, Optional[datetime]]]:
+    """Parse each item's ``published`` exactly once, then rank the items.
 
-    Tier 1 — headline mentions an active linked symbol (word-boundary,
-    case-sensitive ticker match across all link groups); Tier 2 — the rest.
-    Within each tier newest first; items whose timestamp can't be parsed
-    sink to the bottom of their tier.
+    Ranking rule (user-approved): relevance tier first, then recency. Tier 1 —
+    headline mentions an active linked symbol (word-boundary, case-sensitive
+    ticker match across all link groups); Tier 2 — the rest. Within each tier
+    newest first; items whose timestamp can't be parsed sink to the bottom of
+    their tier. Returns ``(entry, parsed_dt)`` pairs so callers reuse the parsed
+    datetime instead of parsing it again for display. Non-dict entries are
+    dropped (they carry no renderable fields).
     """
     ctx = SymbolContext.instance()
     symbols = {s for s in (ctx.symbol(g) for g in GROUPS) if s}
     patterns = [re.compile(rf"\b{re.escape(s)}\b") for s in symbols]
 
-    def key(entry: Any) -> tuple:
-        title = entry.get("title") or "" if isinstance(entry, dict) else ""
+    pairs: list[tuple[dict, Optional[datetime]]] = [
+        (entry, parse_published(entry.get("published")))
+        for entry in items
+        if isinstance(entry, dict)
+    ]
+
+    def key(pair: tuple[dict, Optional[datetime]]) -> tuple:
+        entry, dt = pair
+        title = entry.get("title") or ""
         tier = 0 if any(p.search(title) for p in patterns) else 1
-        dt = parse_published(entry.get("published")) if isinstance(entry, dict) else None
         ts = dt.timestamp() if dt is not None else float("-inf")
         return (tier, -ts)
 
-    return sorted(items, key=key)
+    pairs.sort(key=key)
+    return pairs
+
+
+def sort_news_items(items: list) -> list:
+    """Ranked news entries (see ``_ranked_with_dates`` for the rule). Kept as a
+    thin compatibility wrapper; ``populate_news_table`` uses the paired form so
+    it never re-parses timestamps."""
+    return [entry for entry, _dt in _ranked_with_dates(items)]
 
 
 def populate_news_table(table: QTableWidget, data: Any) -> int:
-    """Fill ``table`` from a list of news dicts, sorted per
-    ``sort_news_items``. Returns the row count."""
+    """Fill ``table`` from a list of news dicts, ranked per
+    ``_ranked_with_dates``. Returns the row count."""
     table.setRowCount(0)
-    items = sort_news_items(data) if isinstance(data, list) else []
+    pairs = _ranked_with_dates(data) if isinstance(data, list) else []
     count = 0
-    for entry in items:
-        if not isinstance(entry, dict):
-            continue
+    for entry, published_dt in pairs:
         title = entry.get("title") or "(untitled)"
         publisher = entry.get("publisher") or ""
-        when = format_when(parse_published(entry.get("published")))
+        when = format_when(published_dt)  # reuse the datetime parsed for ranking
 
         row = table.rowCount()
         table.insertRow(row)

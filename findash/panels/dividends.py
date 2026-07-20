@@ -8,14 +8,13 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QGridLayout,
     QHeaderView,
     QLabel,
-    QTableWidget,
     QTableWidgetItem,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import ACCENT, FG_DIM
 
@@ -61,12 +60,8 @@ class DividendsPanel(Panel):
         self.content_layout.addLayout(self.stats_grid)
 
         # -- history / splits table -------------------------------------------
-        self.table = QTableWidget(0, len(HEADERS), self)
+        self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.content_layout.addWidget(self.table, 1)
 

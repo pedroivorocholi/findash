@@ -100,6 +100,9 @@ class DataHub(QObject):
         self._policies: list[tuple[str, TopicPolicy]] = []  # (pattern, policy)
         self._subs: dict[str, list[_Subscription]] = {}
         self._topics: dict[str, _TopicState] = {}
+        # owners whose destroyed→cleanup is already wired, so we connect it at
+        # most once per QObject no matter how many topics it subscribes to.
+        self._tracked_owners: set[int] = set()
         self._pool = QThreadPool.globalInstance()
         self._publish_sig.connect(self._do_publish)
         self._error_sig.connect(self._do_publish_error)
@@ -132,23 +135,53 @@ class DataHub(QObject):
         triggers a refresh if stale."""
         sub = _Subscription(owner, callback, on_error)
         self._subs.setdefault(topic, []).append(sub)
-        owner.destroyed.connect(lambda *_: self.unsubscribe_all(owner))
+        oid = id(owner)
+        if oid not in self._tracked_owners:
+            # Wire destroyed→cleanup exactly once per owner. Panels re-subscribe
+            # on every symbol change (unsubscribe_all + subscribe), so connecting
+            # here unconditionally would pile up duplicate destroyed handlers.
+            self._tracked_owners.add(oid)
+            owner.destroyed.connect(lambda *_: self._forget_owner(owner))
         st = self._topics.get(topic)
         if st and st.has_value:
             callback(st.value)  # warm start, stale-is-better-than-blank
         self.request([topic])
 
     def unsubscribe(self, owner: QObject, topic: str) -> None:
-        subs = self._subs.get(topic, [])
-        self._subs[topic] = [s for s in subs if s.owner is not owner]
+        subs = self._subs.get(topic)
+        if not subs:
+            return
+        remaining = [s for s in subs if s.owner is not owner]
+        if remaining:
+            self._subs[topic] = remaining
+        else:
+            del self._subs[topic]  # no subscribers left — drop the key
 
     def unsubscribe_all(self, owner: QObject) -> None:
         for topic in list(self._subs):
-            self._subs[topic] = [s for s in self._subs[topic] if s.owner is not owner]
+            remaining = [s for s in self._subs[topic] if s.owner is not owner]
+            if remaining:
+                self._subs[topic] = remaining
+            else:
+                del self._subs[topic]  # no subscribers left — drop the key
+
+    def _forget_owner(self, owner: QObject) -> None:
+        """Owner destroyed: release its subscriptions and stop tracking it."""
+        self._tracked_owners.discard(id(owner))
+        self.unsubscribe_all(owner)
+
+    def purge_stale_topics(self) -> int:
+        """Drop cached topic state that has no live subscribers. Opt-in (not run
+        by the scheduler) so warm caches survive brief re-subscribe gaps.
+        Returns the number of topics evicted."""
+        stale = [t for t in self._topics if not self._subs.get(t)]
+        for t in stale:
+            del self._topics[t]
+        return len(stale)
 
     def subscribed_topics(self) -> list[str]:
-        """Topics with at least one live subscriber (unsubscribe_all leaves
-        empty lists behind, hence the filter)."""
+        """Topics with at least one live subscriber. Keys are now dropped when
+        they empty, but keep the filter as a cheap invariant guard."""
         return [topic for topic, subs in self._subs.items() if subs]
 
     # -- publishing (provider side; any thread) ----------------------------

@@ -13,15 +13,14 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QButtonGroup,
     QHBoxLayout,
     QHeaderView,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import DOWN, UP
 
@@ -73,13 +72,8 @@ class MoversPanel(Panel):
         kind_row.addStretch(1)
         self.content_layout.addLayout(kind_row)
 
-        self.table = QTableWidget(0, len(HEADERS), self)
+        self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setAlternatingRowColors(True)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(COL_SYMBOL, QHeaderView.ResizeMode.ResizeToContents)
         for col in (COL_NAME, COL_LAST, COL_CHGPCT, COL_VOLUME):
