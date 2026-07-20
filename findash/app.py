@@ -926,4 +926,8 @@ class MainWindow(QMainWindow):
             self.layout_store.set_last(self.serialize_layout())
         except Exception:
             pass
+        try:
+            DataHub.instance()._flush_cache()  # persist latest values for next launch
+        except Exception:
+            pass
         super().closeEvent(event)

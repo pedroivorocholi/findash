@@ -5,7 +5,7 @@
 
 [Setup]
 AppName=findash
-AppVersion=1.3.2
+AppVersion=1.3.3
 AppPublisher=findash
 DefaultDirName={autopf}\findash
 DefaultGroupName=findash

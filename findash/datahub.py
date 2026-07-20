@@ -111,6 +111,22 @@ class DataHub(QObject):
         self._scheduler.timeout.connect(self._tick)
         self._scheduler.start()
 
+        # Persistent topic cache: serve last-known values instantly on startup
+        # (offline-friendly), flushed periodically rather than on every publish
+        # to bound disk writes. Entirely best-effort — a failure just disables it.
+        try:
+            from .cache import TopicCache
+
+            self._cache: Optional["TopicCache"] = TopicCache()
+            self._cache.prune()
+        except Exception:
+            self._cache = None
+        self._cache_flush = QTimer(self)
+        self._cache_flush.setInterval(60_000)  # persist current values each minute
+        self._cache_flush.timeout.connect(self._flush_cache)
+        if self._cache is not None and self._cache.available():
+            self._cache_flush.start()
+
     # -- registration ------------------------------------------------------
 
     def register_provider(self, provider: Provider) -> None:
@@ -145,6 +161,15 @@ class DataHub(QObject):
         st = self._topics.get(topic)
         if st and st.has_value:
             callback(st.value)  # warm start, stale-is-better-than-blank
+        elif self._cache is not None:
+            cached = self._cache.get(topic)
+            if cached is not None:
+                value, _ts = cached
+                cs = self._state(topic)
+                cs.value = value
+                cs.has_value = True
+                cs.last_publish = 0.0  # treat as stale so a live refresh still runs
+                callback(value)  # warm from disk — instant, offline-friendly
         self.request([topic])
 
     def unsubscribe(self, owner: QObject, topic: str) -> None:
@@ -282,6 +307,17 @@ class DataHub(QObject):
                 due.append(topic)
         if due:
             self.request(due)
+
+    def _flush_cache(self) -> None:
+        """Persist current topic values so the next launch starts with warm data
+        (and works offline). Runs on a 60s timer, not per-publish, to keep disk
+        writes bounded."""
+        if self._cache is None:
+            return
+        items = [
+            (topic, st.value) for topic, st in self._topics.items() if st.has_value
+        ]
+        self._cache.put_many(items)  # one transaction, not one commit per topic
 
     def _state(self, topic: str) -> _TopicState:
         if topic not in self._topics:

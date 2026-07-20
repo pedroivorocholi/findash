@@ -63,6 +63,8 @@ _SHORTCUTS_HTML = _page_css() + f"""
   {_row(_kbd("F5"), "Refresh all live feeds (quotes, news, charts, financials)")}
   {_row(_kbd("F11"), "Maximize the focused panel — press again to restore")}
   {_row(_kbd("Esc"), "Restore a maximized panel")}
+  {_row(_kbd("Ctrl", "W"), "Close the focused panel")}
+  {_row(_kbd("Ctrl", "Shift", "T"), "Reopen the last panel you closed")}
   {_row(_kbd("F1"), "Open this Keyboard Shortcuts &amp; Guide window")}
   {_row(_kbd("Ctrl", "S"), "Save the current layout under a name")}
   {_row(_kbd("Ctrl", "Q"), "Quit findash")}
@@ -72,6 +74,7 @@ _SHORTCUTS_HTML = _page_css() + f"""
 <table>
   {_row("Click a row", "Set that symbol for the panel's link group — linked panels follow")}
   {_row("Link badge (top-right)", "Change a panel's link group, or unlink it")}
+  {_row(_kbd("Ctrl", "1") + "–" + _kbd("Ctrl", "4"), "Set the focused panel's link group (A/B/C/D)")}
   {_row("Drag a panel tab", "Move &amp; snap it into a new position (panels never float free)")}
   {_row("Middle-click a tab", "Close that panel")}
 </table>
@@ -115,6 +118,11 @@ but never tear off into free-floating windows. Pin a panel to a window edge to
 turn it into a slide-out tab. Press <b>F11</b> to focus on one panel full-window,
 Esc or F11 to bring the rest back.</p>
 
+<h2>Theme</h2>
+<p>Switch between the <b>dark</b> (default) and <b>light</b> theme under
+<b>View &#9656; Theme</b>. findash restarts to apply it, so the whole interface —
+charts included — matches the theme you pick.</p>
+
 <h2>Symbol search &amp; link groups</h2>
 <p>Each panel carries a colored <b>link badge</b> in its top-right corner. Panels
 in the same group share a symbol, so clicking a name in one (a mover, a holding,
@@ -137,7 +145,9 @@ machine. Your last arrangement is auto-saved and restored on the next launch.</p
 <p>findash runs out of the box on free, keyless sources (Yahoo Finance, Google
 News — delayed). Connect optional free API keys from the <b>APIs</b> menu
 (Finnhub, Twelve Data, FRED, EIA, NewsAPI) for richer, faster data. Press
-<b>F5</b> anytime to force-refresh every live feed.</p>
+<b>F5</b> anytime to force-refresh every live feed. Recently-seen data is cached
+locally, so panels fill in instantly on the next launch — even offline — before
+a fresh refresh runs.</p>
 </body>
 """
 
