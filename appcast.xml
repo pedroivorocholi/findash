@@ -20,6 +20,33 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.3.4</title>
+      <description><![CDATA[
+        <style>
+          html, body { background:#ffffff; color:#141414; margin:0;
+                       padding:10px 12px; font-family:'Segoe UI', Arial, sans-serif;
+                       font-size:13px; line-height:1.4; }
+          h3 { margin:0 0 8px; font-size:15px; color:#111111; }
+          ul { margin:0; padding-left:20px; }
+          li { margin:4px 0; }
+        </style>
+        <h3>What&rsquo;s new in 1.3.4</h3>
+        <ul>
+          <li>Under-the-hood hardening: unexpected errors are now written to a local <code>findash.log</code> so problems can be diagnosed, and the data scheduler resolves feed timings faster.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Mon, 20 Jul 2026 17:48:15 -0300</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.3.4/findash-setup.exe"
+        sparkle:version="1.3.4"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="72873044"
+        sparkle:edSignature="RPJs7J6S3EGizCHVa37V/42wb1VuoNN943tPy62N55sUlkD9Q1iIxMmlL6RxL6O/6YQCMuv4mYH9GPHpIU7FDg=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.3.3</title>
       <description><![CDATA[
         <style>

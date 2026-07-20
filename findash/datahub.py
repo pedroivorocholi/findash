@@ -98,6 +98,9 @@ class DataHub(QObject):
         super().__init__()
         self._providers: list[Provider] = []
         self._policies: list[tuple[str, TopicPolicy]] = []  # (pattern, policy)
+        # fast path for the common "prefix:*" policy — O(1) by first segment,
+        # so the 1s scheduler doesn't fnmatch every policy for every topic
+        self._policy_prefix: dict[str, TopicPolicy] = {}
         self._subs: dict[str, list[_Subscription]] = {}
         self._topics: dict[str, _TopicState] = {}
         # owners whose destroyed→cleanup is already wired, so we connect it at
@@ -133,9 +136,20 @@ class DataHub(QObject):
         self._providers.append(provider)
 
     def set_policy(self, pattern: str, policy: TopicPolicy) -> None:
-        # longest (most specific) pattern wins at resolve time
-        self._policies.append((pattern, policy))
-        self._policies.sort(key=lambda p: len(p[0]), reverse=True)
+        # single-segment "prefix:*" with no other wildcard → O(1) dict lookup;
+        # everything else (multi-segment or true glob) keeps the fnmatch list
+        # (longest/most-specific pattern wins). The single-colon guard matters:
+        # _resolve_policy keys on the FIRST segment, so a multi-segment prefix
+        # would never match — it must go through fnmatch instead.
+        if (
+            pattern.count(":") == 1
+            and pattern.endswith(":*")
+            and not any(c in pattern[:-2] for c in "*?[")
+        ):
+            self._policy_prefix[pattern[:-2]] = policy
+        else:
+            self._policies.append((pattern, policy))
+            self._policies.sort(key=lambda p: len(p[0]), reverse=True)
 
     # -- subscribing -------------------------------------------------------
 
@@ -325,6 +339,9 @@ class DataHub(QObject):
         return self._topics[topic]
 
     def _resolve_policy(self, topic: str) -> TopicPolicy:
+        pol = self._policy_prefix.get(topic.split(":", 1)[0])
+        if pol is not None:
+            return pol
         for pattern, policy in self._policies:
             if fnmatch.fnmatchcase(topic, pattern):
                 return policy

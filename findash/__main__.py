@@ -26,6 +26,54 @@ def _set_windows_app_id() -> None:
         pass
 
 
+def _install_crash_logging() -> None:
+    """Always record unhandled exceptions to a size-capped ``findash.log`` next to
+    the app, so a crash leaves a trace even without FINDASH_DEBUG. Additive — it
+    doesn't redirect normal stdout/stderr. PySide6 routes unhandled slot
+    exceptions through ``sys.excepthook``, so Qt-callback crashes are captured too."""
+    import threading
+    import traceback as _tb
+
+    log_path = EXT_DIR / "findash.log"
+
+    def _write(header: str, text: str) -> None:
+        try:
+            if log_path.exists() and log_path.stat().st_size > 512 * 1024:
+                tail = log_path.read_text(encoding="utf-8", errors="replace")[-256 * 1024:]
+                log_path.write_text(tail, encoding="utf-8")
+            with open(log_path, "a", encoding="utf-8") as fh:
+                fh.write(f"\n{header}\n{text}\n")
+        except OSError:
+            pass
+
+    def _excepthook(exc_type, exc, tb) -> None:
+        _write(
+            "=== unhandled exception ===",
+            "".join(_tb.format_exception(exc_type, exc, tb)),
+        )
+        sys.__excepthook__(exc_type, exc, tb)
+
+    sys.excepthook = _excepthook
+
+    _default_thread_hook = threading.excepthook
+
+    def _thread_hook(args) -> None:
+        _write(
+            "=== unhandled thread exception ===",
+            "".join(
+                _tb.format_exception(
+                    args.exc_type, args.exc_value, args.exc_traceback
+                )
+            ),
+        )
+        _default_thread_hook(args)  # keep default stderr behavior / SystemExit handling
+
+    try:
+        threading.excepthook = _thread_hook
+    except Exception:
+        pass
+
+
 def _maybe_capture_output() -> None:
     """A frozen build has no console. When FINDASH_DEBUG is set, tee stdout/err
     to a log next to the exe so tracebacks (incl. panel build failures) surface."""
@@ -40,6 +88,7 @@ def _maybe_capture_output() -> None:
 
 def main() -> int:
     _maybe_capture_output()
+    _install_crash_logging()
     load_dotenv(EXT_DIR / ".env")
     _set_windows_app_id()
 
