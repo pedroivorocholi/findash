@@ -262,6 +262,13 @@ class NewsPanelBase(Panel):
 
         self.snippet_ready.connect(self._on_snippet)
 
+        # Hide the preview snippet as soon as focus leaves this panel — clicking
+        # any other panel dismisses it (Qt auto-drops this connection when the
+        # panel is destroyed, since the slot is a bound method of this QObject).
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.instance().focusChanged.connect(self._on_focus_changed)
+
     # -- rendering ---------------------------------------------------------
 
     def _render_news(self, data: Any) -> int:
@@ -298,6 +305,20 @@ class NewsPanelBase(Panel):
         title_item = self.table.item(row, 1)
         title = title_item.text() if title_item is not None else ""
         self._show_preview(url, news_summary_at(self.table, row), title)
+
+    def _on_focus_changed(self, _old, now) -> None:
+        """Dismiss the preview snippet when focus moves to a widget outside this
+        news panel (i.e. the user clicked off it). Focus staying within the
+        panel — table, filter box — keeps the preview up."""
+        if now is None or now is self or self.isAncestorOf(now):
+            return
+        self._hide_preview()
+
+    def _hide_preview(self) -> None:
+        self._current_url = None
+        self.preview_lbl.clear()
+        self.preview_lbl.setVisible(False)
+        self.table.clearSelection()
 
     def _open_row(self, row: int, _col: int) -> None:
         url = news_url_at(self.table, row)

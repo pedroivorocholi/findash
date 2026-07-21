@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
@@ -22,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
-from ..theme import DOWN, UP
+from ..theme import apply_tick
 
 KINDS = [("Gainers", "gainers"), ("Losers", "losers"), ("Most Active", "actives")]
 VALID_KINDS = {kind for _label, kind in KINDS}
@@ -135,8 +134,7 @@ class MoversPanel(Panel):
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 if chg_pct is not None:
-                    color = QColor(UP) if chg_pct >= 0 else QColor(DOWN)
-                    chg_item.setForeground(color)
+                    apply_tick(chg_item, chg_pct)
                 self.table.setItem(row, COL_LAST, last_item)
                 self.table.setItem(row, COL_CHGPCT, chg_item)
                 self.table.setItem(row, COL_VOLUME, vol_item)

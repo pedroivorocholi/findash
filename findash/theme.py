@@ -5,7 +5,7 @@ surfaces, a desaturated steel-blue title bar on every panel, amber as a primary
 text color (not just an accent), blue column-header bands, true green/red for
 ticks, and dense, monospaced tabular figures.
 
-A light variant is available (View ▸ Theme). Colors are exposed as module-level
+A light variant is available (Settings ▸ Theme). Colors are exposed as module-level
 constants (``BG``, ``ACCENT``, …) that the rest of the app imports at load time,
 and the active palette is chosen ONCE at import from the saved preference. The
 theme therefore applies fully — charts and all — on the next launch, which is
@@ -97,10 +97,15 @@ def current_theme() -> str:
 
 
 def palette_colors(name: str | None = None) -> dict:
-    """A copy of a theme's raw color map (defaults to the active theme). Lets
-    other modules (e.g. the chart's per-panel colors) tell a theme-derived
-    default from a genuine user customization across both themes."""
-    return dict(_PALETTES.get(name or _read_theme_name(), _ACTIVE))
+    """A copy of a theme's color map (defaults to the active theme), with the
+    color-blind up/down override folded in when that mode is on. Lets other
+    modules (e.g. the chart's per-panel colors) tell a theme-derived default
+    from a genuine user customization across both themes."""
+    name = name or _read_theme_name()
+    pal = dict(_PALETTES.get(name, _ACTIVE))
+    if _read_colorblind() and name in _COLORBLIND:
+        pal.update(_COLORBLIND[name])
+    return pal
 
 
 def set_theme(name: str) -> None:
@@ -111,8 +116,46 @@ def set_theme(name: str) -> None:
         QSettings().setValue(THEME_SETTINGS_KEY, name)
 
 
+# -- color-blind mode -------------------------------------------------------
+#: QSettings key: when true, up/down use a deuteranopia/protanopia-safe palette
+#: (blue up, vermillion down) instead of green/red, AND panels prefix ▲/▼ so
+#: direction reads without relying on color at all.
+COLORBLIND_SETTINGS_KEY = "ui/colorblind"
+
+# Okabe–Ito-derived safe up/down per theme. Sky-blue up + vermillion down stay
+# mutually distinct under red-green color blindness and clear of the amber
+# ACCENT. Tuned per theme so each reads on its own background.
+_COLORBLIND = {
+    "dark":  {"UP": "#56b4e9", "DOWN": "#e8703a"},
+    "light": {"UP": "#0072b2", "DOWN": "#d55e00"},
+}
+
+
+def _read_colorblind() -> bool:
+    """The saved color-blind flag. Safe before a QApplication exists."""
+    try:
+        return bool(QSettings().value(COLORBLIND_SETTINGS_KEY, False, type=bool))
+    except Exception:
+        return False
+
+
+def colorblind_enabled() -> bool:
+    """Whether the color-blind (deuteranopia-safe) mode is active."""
+    return _read_colorblind()
+
+
+def set_colorblind(on: bool) -> None:
+    """Persist the color-blind choice. Applied on the next launch (the caller
+    prompts for a restart), the same way a theme change is, so every panel and
+    chart renders one consistent palette."""
+    QSettings().setValue(COLORBLIND_SETTINGS_KEY, bool(on))
+
+
 # -- activate the saved palette: publish its colors as module constants -----
-_ACTIVE = _PALETTES[_read_theme_name()]
+_active_name = _read_theme_name()
+_ACTIVE = dict(_PALETTES[_active_name])
+if _read_colorblind():
+    _ACTIVE.update(_COLORBLIND[_active_name])
 globals().update(_ACTIVE)
 # kept for import stability (referenced by name elsewhere / historically)
 CHROME_HI = _ACTIVE["CHROME_HOVER"]
@@ -120,10 +163,6 @@ CHROME_LO = _ACTIVE["CHROME"]
 
 
 def _build_stylesheet(p: dict) -> str:
-    chrome_grad = (
-        f"qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-        f" stop:0 {p['CHROME_HOVER']}, stop:0.5 {p['CHROME']}, stop:1 {p['CHROME']})"
-    )
     return f"""
 * {{ outline: 0; }}
 QWidget {{
@@ -132,7 +171,7 @@ QWidget {{
 }}
 QToolTip {{
     background: {p['CHROME']}; color: {p['CHROME_TEXT']};
-    border: 1px solid {p['CHROME_BORDER']}; padding: 4px 7px;
+    border: 1px solid {p['CHROME_BORDER']}; border-radius: 3px; padding: 5px 9px;
 }}
 
 /* -- panel header: a thin context strip under the title bar --------------- */
@@ -140,7 +179,7 @@ QWidget#panelHeader {{
     background: {p['BG']}; border-bottom: 1px solid {p['BORDER']};
 }}
 QLabel#panelEyebrow {{
-    color: {p['FG_MUTED']}; font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+    color: {p['FG_MUTED']}; font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
 }}
 QLabel#panelStatus {{
     color: {p['ACCENT_DEEP']}; font-size: 10px; font-family: "{MONO_FONT}";
@@ -151,15 +190,15 @@ QMenuBar {{
     background: {p['CHROME']}; color: {p['CHROME_TEXT']};
     border-bottom: 1px solid {p['CHROME_BORDER']}; padding: 0px 4px;
 }}
-QMenuBar::item {{ padding: 3px 9px; border-radius: 3px; color: {p['CHROME_TEXT_DIM']}; }}
+QMenuBar::item {{ padding: 3px 9px; border-radius: 2px; color: {p['CHROME_TEXT_DIM']}; }}
 QMenuBar::item:selected {{ background: {p['CHROME_HOVER']}; color: {p['CHROME_TEXT']}; }}
 
-QWidget#commandBar {{ background: {p['BG']}; border-bottom: 1px solid {p['BORDER_STRONG']}; }}
+QWidget#commandBar {{ background: {p['BG']}; border-bottom: 1px solid {p['BORDER']}; }}
 QLabel#commandLabel {{
     color: {p['ACCENT']}; font-size: 11px; font-weight: 700; letter-spacing: 2px;
 }}
 QLineEdit#commandInput {{
-    background: {p['BG']}; border: 1px solid {p['BORDER_STRONG']}; border-radius: 3px;
+    background: {p['BG']}; border: 1px solid {p['BORDER_STRONG']}; border-radius: 2px;
     padding: 4px 10px; color: {p['ACCENT']}; font-family: "{MONO_FONT}"; font-size: 13px;
     selection-background-color: {p['ACCENT']}; selection-color: {p['ON_ACCENT']};
 }}
@@ -173,12 +212,14 @@ QTableWidget, QTableView {{
     font-family: "{MONO_FONT}"; font-size: 11px;
 }}
 QTableView::item {{ padding: 1px 4px; }}
+QHeaderView {{ background: {p['HEADER_BLUE']}; }}
 QHeaderView::section {{
     background: {p['HEADER_BLUE']}; color: {p['CHROME_TEXT_DIM']}; border: 0;
-    border-right: 1px solid {p['CHROME_BORDER']}; border-bottom: 1px solid {p['CHROME_BORDER']};
+    border-right: 1px solid {p['BORDER']}; border-bottom: 1px solid {p['BORDER']};
     padding: 4px 6px; font-family: "{UI_FONT}"; font-size: 10px; font-weight: 700;
     letter-spacing: 0.4px;
 }}
+QHeaderView::section:hover {{ background: {p['CHROME_HOVER']}; color: {p['CHROME_TEXT']}; }}
 QHeaderView::section:last {{ border-right: 0; }}
 QTableCornerButton::section {{ background: {p['HEADER_BLUE']}; border: 0; }}
 QListWidget {{
@@ -188,48 +229,82 @@ QListWidget {{
 QListWidget::item {{ padding: 2px 4px; }}
 QListWidget::item:selected {{ background: {p['SELECT_BLUE']}; color: {p['CHROME_TEXT']}; }}
 
+/* -- inner tab widgets (e.g. Portfolio) — amber underline like the docks -- */
+QTabWidget::pane {{ border: 0; border-top: 1px solid {p['BORDER']}; }}
+QTabBar::tab {{
+    background: transparent; color: {p['CHROME_TEXT_DIM']};
+    padding: 5px 12px; border: 0; border-bottom: 2px solid transparent;
+    font-weight: 600;
+}}
+QTabBar::tab:hover {{ color: {p['CHROME_TEXT']}; }}
+QTabBar::tab:selected {{ color: {p['CHROME_TEXT']}; border-bottom: 2px solid {p['ACCENT']}; }}
+
 /* -- inputs -------------------------------------------------------------- */
-QLineEdit {{
-    background: {p['BG']}; border: 1px solid {p['BORDER_STRONG']}; border-radius: 3px;
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+    background: {p['BG']}; border: 1px solid {p['BORDER_STRONG']}; border-radius: 2px;
     padding: 4px 8px; color: {p['FG']};
     selection-background-color: {p['ACCENT']}; selection-color: {p['ON_ACCENT']};
 }}
-QLineEdit:focus {{ border-color: {p['ACCENT']}; }}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+    border-color: {p['ACCENT']};
+}}
+QLineEdit:hover, QComboBox:hover {{ border-color: {p['CHROME_HOVER']}; }}
+QLineEdit:disabled, QComboBox:disabled {{ color: {p['FG_MUTED']}; }}
+QComboBox::drop-down {{ border: 0; width: 18px; }}
+QComboBox QAbstractItemView {{
+    background: {p['CHROME']}; border: 1px solid {p['CHROME_BORDER']};
+    selection-background-color: {p['ACCENT']}; selection-color: {p['ON_ACCENT']};
+    padding: 2px;
+}}
 
 /* -- buttons: flat tabs, amber when active ------------------------------- */
 QPushButton {{
     background: {p['BG_ELEV']}; color: {p['CHROME_TEXT_DIM']};
-    border: 1px solid {p['BORDER_STRONG']}; border-radius: 3px;
-    padding: 4px 11px; font-size: 11px; font-weight: 600;
+    border: 1px solid {p['BORDER_STRONG']}; border-radius: 2px;
+    padding: 5px 13px; font-size: 11px; font-weight: 600;
 }}
-QPushButton:hover {{ color: {p['CHROME_TEXT']}; border-color: {p['CHROME_HOVER']}; }}
+QPushButton:hover {{
+    background: {p['CHROME_HOVER']}; color: {p['CHROME_TEXT']}; border-color: {p['BORDER_STRONG']};
+}}
 QPushButton:pressed {{ background: {p['HEADER_BLUE']}; }}
 QPushButton:checked {{
     background: {p['ACCENT']}; color: {p['ON_ACCENT']}; border-color: {p['ACCENT']}; font-weight: 700;
 }}
-QPushButton:disabled {{ color: {p['FG_MUTED']}; border-color: {p['BORDER']}; }}
+QPushButton:checked:hover {{ background: {p['ACCENT_DEEP']}; border-color: {p['ACCENT_DEEP']}; }}
+QPushButton:disabled {{ color: {p['FG_MUTED']}; border-color: {p['BORDER']}; background: {p['BG_ALT']}; }}
 
-QToolButton {{ background: transparent; border: 0; color: {p['CHROME_TEXT']}; padding: 2px; }}
-QToolButton:hover {{ background: rgba(128,128,128,0.18); border-radius: 3px; }}
+QToolButton {{
+    background: transparent; border: 0; border-radius: 2px;
+    color: {p['CHROME_TEXT']}; padding: 3px;
+}}
+QToolButton:hover {{ background: rgba(128,128,128,0.18); }}
+QToolButton:pressed {{ background: rgba(128,128,128,0.30); }}
+
+/* -- checkboxes / radios ------------------------------------------------- */
+QCheckBox, QRadioButton {{ spacing: 6px; }}
 
 /* -- menus --------------------------------------------------------------- */
-QMenu {{ background: {p['CHROME']}; border: 1px solid {p['CHROME_BORDER']}; padding: 3px; }}
-QMenu::item {{ padding: 5px 22px 5px 12px; border-radius: 3px; color: {p['CHROME_TEXT']}; }}
+QMenu {{
+    background: {p['CHROME']}; border: 1px solid {p['CHROME_BORDER']};
+    border-radius: 3px; padding: 4px;
+}}
+QMenu::item {{ padding: 6px 24px 6px 12px; border-radius: 2px; color: {p['CHROME_TEXT']}; }}
 QMenu::item:selected {{ background: {p['ACCENT']}; color: {p['ON_ACCENT']}; }}
-QMenu::separator {{ height: 1px; background: {p['CHROME_BORDER']}; margin: 4px 8px; }}
+QMenu::item:disabled {{ color: {p['FG_MUTED']}; }}
+QMenu::separator {{ height: 1px; background: {p['CHROME_BORDER']}; margin: 5px 10px; }}
 QMenu::indicator {{ width: 13px; height: 13px; }}
 
 /* -- scrollbars ---------------------------------------------------------- */
-QScrollBar:vertical {{ background: transparent; width: 11px; margin: 0; }}
+QScrollBar:vertical {{ background: transparent; width: 9px; margin: 0; }}
 QScrollBar::handle:vertical {{
-    background: {p['BORDER_STRONG']}; border-radius: 4px; min-height: 28px; margin: 2px;
+    background: {p['BORDER']}; border-radius: 3px; min-height: 28px; margin: 2px;
 }}
-QScrollBar::handle:vertical:hover {{ background: {p['CHROME_HOVER']}; }}
-QScrollBar:horizontal {{ background: transparent; height: 11px; margin: 0; }}
+QScrollBar::handle:vertical:hover {{ background: {p['BORDER_STRONG']}; }}
+QScrollBar:horizontal {{ background: transparent; height: 9px; margin: 0; }}
 QScrollBar::handle:horizontal {{
-    background: {p['BORDER_STRONG']}; border-radius: 4px; min-width: 28px; margin: 2px;
+    background: {p['BORDER']}; border-radius: 3px; min-width: 28px; margin: 2px;
 }}
-QScrollBar::handle:horizontal:hover {{ background: {p['CHROME_HOVER']}; }}
+QScrollBar::handle:horizontal:hover {{ background: {p['BORDER_STRONG']}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
@@ -244,16 +319,17 @@ QStatusBar::item {{ border: 0; }}
 
 def _build_ads_stylesheet(p: dict) -> str:
     return f"""
-ads--CDockContainerWidget {{ background: {p['CHROME_BORDER']}; }}
+ads--CDockContainerWidget {{ background: {p['BORDER']}; }}
 ads--CDockAreaWidget {{ background: {p['BG']}; border: 0; }}
 ads--CDockAreaTitleBar {{
     background: {p['CHROME']}; border: 0; border-bottom: 1px solid {p['CHROME_BORDER']};
-    padding: 0;
+    padding: 0 2px;
 }}
 ads--CDockWidgetTab {{
-    background: {p['CHROME']}; border: 0; border-right: 1px solid {p['CHROME_BORDER']};
-    padding: 2px 9px;
+    background: transparent; border: 0; border-right: 1px solid {p['CHROME_BORDER']};
+    border-bottom: 2px solid transparent; padding: 4px 12px;
 }}
+ads--CDockWidgetTab:hover {{ background: {p['CHROME_HOVER']}; }}
 ads--CDockWidgetTab[activeTab="true"] {{
     background: {p['CHROME_HOVER']}; border-bottom: 2px solid {p['ACCENT']};
 }}
@@ -277,10 +353,10 @@ ads--CTitleBarButton {{
     color: {p['CHROME_TEXT_DIM']}; qproperty-iconSize: 12px 12px;
 }}
 ads--CTitleBarButton:hover {{ background: rgba(128,128,128,0.22); border-radius: 2px; }}
-/* splitters: wide, easy-to-grab, subtle until hovered (then amber) */
-ads--CDockSplitter::handle {{ background: {p['CHROME_BORDER']}; }}
-ads--CDockSplitter::handle:horizontal {{ width: 6px; }}
-ads--CDockSplitter::handle:vertical {{ height: 6px; }}
+/* splitters: thin hairline dividers, subtle until hovered (then amber) */
+ads--CDockSplitter::handle {{ background: {p['BORDER']}; }}
+ads--CDockSplitter::handle:horizontal {{ width: 2px; }}
+ads--CDockSplitter::handle:vertical {{ height: 2px; }}
 ads--CDockSplitter::handle:hover {{ background: {p['ACCENT']}; }}
 """
 
@@ -312,3 +388,41 @@ def apply_theme(app: QApplication) -> None:
     pal.setColor(QPalette.ColorRole.Link, QColor(p["ACCENT"]))
     app.setPalette(pal)
     app.setStyleSheet(STYLESHEET)
+
+
+# -- up/down tick helpers ---------------------------------------------------
+# Shared by every panel that colors a signed change value, so the color-blind
+# palette swap and the ▲/▼ direction glyph are decided in exactly one place.
+
+def tick_color(value) -> str:
+    """The up/down color for a signed number, from the active palette (already
+    color-blind-safe when that mode is on). ``None``/negative reads as down."""
+    return UP if (value is not None and value >= 0) else DOWN
+
+
+def tick_glyph(value) -> str:
+    """A ``"▲ "`` / ``"▼ "`` prefix for a signed number when color-blind mode is
+    on, else ``""`` — so direction survives without color."""
+    if not colorblind_enabled():
+        return ""
+    return "▲ " if (value is not None and value >= 0) else "▼ "
+
+
+def apply_tick(item, value, *, text: str | None = None, glyph: bool = True) -> None:
+    """Color a table cell by the sign of ``value`` and, in color-blind mode,
+    prefix its text with ▲/▼. Pass ``text`` to set the cell text here, or call
+    after the item's text is already set to prepend the glyph to it.
+
+    Set ``glyph=False`` for a secondary cell colored from the same sign (e.g. a
+    change *and* a %-change column in one row) so only one ▲/▼ shows per row.
+
+    Replaces the repeated ``QColor(UP) if v >= 0 else QColor(DOWN)`` +
+    ``setForeground`` pattern across the data panels.
+    """
+    if text is not None:
+        item.setText(text)
+    item.setForeground(QColor(tick_color(value)))
+    if glyph:
+        g = tick_glyph(value)
+        if g:
+            item.setText(g + item.text())

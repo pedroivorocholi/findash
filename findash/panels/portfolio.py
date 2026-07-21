@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..panel import Panel, register_panel
-from ..theme import ACCENT, BG_HEADER, DOWN, FG, FG_DIM, UP
+from ..theme import ACCENT, BG_HEADER, FG, FG_DIM, apply_tick
 from ..undo import UndoStack
 
 (COL_SYMBOL, COL_QTY, COL_COST, COL_DATE, COL_LAST, COL_MKTVAL, COL_PNL,
@@ -538,9 +538,8 @@ class PortfolioPanel(Panel):
         pnl_item.setText(_fmt(pnl))
         pnlpct_item.setText(f"{_fmt(pnl_pct)}%" if pnl_pct is not None else "-")
         if pnl is not None:
-            color = QColor(UP) if pnl >= 0 else QColor(DOWN)
-            pnl_item.setForeground(color)
-            pnlpct_item.setForeground(color)
+            apply_tick(pnl_item, pnl, glyph=False)
+            apply_tick(pnlpct_item, pnl)
 
     def _recompute_totals(self) -> None:
         total_row = self.table.rowCount() - 1
@@ -574,9 +573,8 @@ class PortfolioPanel(Panel):
         pnl_item.setText(_fmt(total_pnl))
         pnl_pct = (total_pnl / total_cost * 100.0) if total_cost else None
         pnlpct_item.setText(f"{_fmt(pnl_pct)}%" if pnl_pct is not None else "-")
-        color = QColor(UP) if total_pnl >= 0 else QColor(DOWN)
-        pnl_item.setForeground(color)
-        pnlpct_item.setForeground(color)
+        apply_tick(pnl_item, total_pnl, glyph=False)
+        apply_tick(pnlpct_item, total_pnl)
 
     # -- analytics rendering ------------------------------------------------
 

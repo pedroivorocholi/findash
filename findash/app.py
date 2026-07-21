@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
         from .theme import ADS_STYLESHEET
 
         self.dock_manager.setStyleSheet(ADS_STYLESHEET)
+        self._register_dock_icons()
 
         self._build_menus()
         self._install_fullscreen()
@@ -121,8 +122,8 @@ class MainWindow(QMainWindow):
     def _install_fullscreen(self) -> None:
         """Set up the F11 hotkey, the Esc-to-restore shortcut, and cache the
         maximize/restore title-bar icons."""
-        self._icon_maximize = self._glyph_icon("maximize")
-        self._icon_restore = self._glyph_icon("restore")
+        self._icon_maximize = self._chrome_icon("expand")
+        self._icon_restore = self._chrome_icon("restore")
 
         f11 = QAction(self)
         f11.setShortcut(QKeySequence(Qt.Key.Key_F11))
@@ -236,9 +237,8 @@ class MainWindow(QMainWindow):
         self._close_to_tray_act.setChecked(
             QSettings().value("tray/close_to_tray", False, type=bool)
         )
-        self._close_to_tray_act.toggled.connect(
-            lambda v: QSettings().setValue("tray/close_to_tray", bool(v))
-        )
+        # shared setter keeps this in sync with the Settings-menu toggle
+        self._close_to_tray_act.toggled.connect(self._set_close_to_tray)
         menu.addSeparator()
         menu.addAction("Quit findash").triggered.connect(self._quit_app)
         self._tray_menu = menu  # keep a reference
@@ -247,10 +247,10 @@ class MainWindow(QMainWindow):
         self._tray.show()
 
     def _close_to_tray_enabled(self) -> bool:
-        return (
-            self._tray is not None
-            and getattr(self, "_close_to_tray_act", None) is not None
-            and self._close_to_tray_act.isChecked()
+        # QSettings is the source of truth (both menu toggles write it); the
+        # behavior only applies when a tray actually exists to hide into.
+        return self._tray is not None and QSettings().value(
+            "tray/close_to_tray", False, type=bool
         )
 
     def _on_tray_activated(self, reason) -> None:
@@ -320,26 +320,66 @@ class MainWindow(QMainWindow):
         hub.request(topics, force=True)
         self.statusBar().showMessage(f"Refreshing {len(topics)} feeds…", 2500)
 
-    def _glyph_icon(self, kind: str):
-        """Draw a small maximize (single square) or restore (two offset
-        squares) glyph for the dock title-bar button."""
+    def _chrome_icon(self, kind: str, color: str | None = None):
+        """The panel-chrome icon set — close, maximize, restore, menu, pin —
+        drawn in one consistent style (antialiased, 1.4px round-cap strokes,
+        device-pixel-ratio aware) so every title-bar glyph reads as one family
+        and stays hairline-sharp on HiDPI displays. `restore` keeps the amber
+        tint as a 'panel is maximized' state cue."""
+        from PySide6.QtCore import QPointF, QRectF
         from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 
-        from .theme import ACCENT, CHROME_TEXT
+        from .theme import ACCENT, CHROME_TEXT_DIM
 
-        px = QPixmap(16, 16)
+        col = color or (ACCENT if kind == "restore" else CHROME_TEXT_DIM)
+        dpr = self.devicePixelRatioF() or 1.0
+        px = QPixmap(round(16 * dpr), round(16 * dpr))
+        px.setDevicePixelRatio(dpr)
         px.fill(Qt.GlobalColor.transparent)
         p = QPainter(px)
-        pen = QPen(QColor(ACCENT if kind == "restore" else CHROME_TEXT))
-        pen.setWidth(1)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(QColor(col))
+        pen.setWidthF(1.4)
+        pen.setCosmetic(True)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)
-        if kind == "restore":
-            p.drawRect(5, 3, 7, 7)   # back square (upper-right)
-            p.drawRect(3, 5, 7, 7)   # front square (lower-left)
-        else:
-            p.drawRect(3, 3, 9, 9)
+        if kind == "close":
+            p.drawLine(QPointF(5, 5), QPointF(11, 11))
+            p.drawLine(QPointF(11, 5), QPointF(5, 11))
+        elif kind == "expand":  # diagonal arrows to opposite corners → fill window
+            p.drawLine(QPointF(7, 7), QPointF(4, 4))
+            p.drawLine(QPointF(4, 4), QPointF(4, 7))
+            p.drawLine(QPointF(4, 4), QPointF(7, 4))
+            p.drawLine(QPointF(9, 9), QPointF(12, 12))
+            p.drawLine(QPointF(12, 12), QPointF(12, 9))
+            p.drawLine(QPointF(12, 12), QPointF(9, 12))
+        elif kind == "maximize":
+            p.drawRect(4, 4, 8, 8)
+        elif kind == "restore":
+            p.drawRect(QRectF(5.5, 3.5, 6, 6))  # back square (upper-right)
+            p.drawRect(QRectF(3.5, 5.5, 6, 6))  # front square (lower-left)
+        elif kind == "menu":
+            for y in (5, 8, 11):
+                p.drawLine(QPointF(4, y), QPointF(12, y))
+        elif kind == "pin":
+            p.drawEllipse(QPointF(8, 6), 2.6, 2.6)
+            p.drawLine(QPointF(8, 8.6), QPointF(8, 12.5))
         p.end()
         return QIcon(px)
+
+    def _register_dock_icons(self) -> None:
+        """Replace QtAds' default title-bar icons (tab close, area close, area
+        menu, auto-hide pin) with findash's crisp custom set so all panel chrome
+        shares one icon language."""
+        try:
+            ip = QtAds.CDockManager.iconProvider()
+            ip.registerCustomIcon(QtAds.TabCloseIcon, self._chrome_icon("close"))
+            ip.registerCustomIcon(QtAds.DockAreaCloseIcon, self._chrome_icon("close"))
+            ip.registerCustomIcon(QtAds.DockAreaMenuIcon, self._chrome_icon("menu"))
+            ip.registerCustomIcon(QtAds.AutoHideIcon, self._chrome_icon("pin"))
+        except Exception:
+            pass  # icon provider is a nicety; never block startup on it
 
     def _fade_in(self, widget) -> None:
         """A very slight fade-in on the focal panel so maximize/restore eases
@@ -484,56 +524,128 @@ class MainWindow(QMainWindow):
         return holder
 
     def _build_menus(self) -> None:
-        m_file = self._menubar.addMenu("&File")
+        # Panels is the one primary top-level menu; everything else (theme,
+        # toggles, layouts, API keys, help, quit) lives under Settings.
+        self._m_panels = self._menubar.addMenu("&Panels")
+        self._rebuild_panels_menu()
+
+        self._build_settings_menu()
+
+    def _build_settings_menu(self) -> None:
+        """The consolidated Settings menu — appearance, accessibility, layouts,
+        data keys, help, and quit. Sits beside Panels on the menu bar."""
+        from .theme import THEMES, colorblind_enabled, current_theme
+
+        m = self._menubar.addMenu("&Settings")
+        self._m_settings = m
+
+        # -- appearance: theme + color-blind mode ---------------------------
+        theme_menu = m.addMenu("Theme")
+        self._theme_group = QActionGroup(self)
+        self._theme_group.setExclusive(True)
+        cur = current_theme()
+        for name in THEMES:
+            act = QAction(name.capitalize(), self)
+            act.setCheckable(True)
+            act.setChecked(name == cur)
+            act.triggered.connect(
+                lambda _=False, n=name: self._on_theme_selected(n)
+            )
+            self._theme_group.addAction(act)
+            theme_menu.addAction(act)
+
+        a_cb = QAction("Color-blind mode", self)
+        a_cb.setCheckable(True)
+        a_cb.setChecked(colorblind_enabled())  # set state before connecting
+        a_cb.setToolTip(
+            "Deuteranopia-safe up/down colors plus ▲/▼ direction marks"
+        )
+        a_cb.toggled.connect(self._on_colorblind_toggled)
+        self._colorblind_act = a_cb
+        m.addAction(a_cb)
+
+        a_tray = QAction("Close to tray", self)
+        a_tray.setCheckable(True)
+        a_tray.setChecked(QSettings().value("tray/close_to_tray", False, type=bool))
+        a_tray.setEnabled(QSystemTrayIcon.isSystemTrayAvailable())
+        a_tray.setToolTip(
+            "Keep findash running in the system tray when the window is closed"
+        )
+        a_tray.toggled.connect(self._set_close_to_tray)
+        self._settings_tray_act = a_tray
+        m.addAction(a_tray)
+
+        m.addSeparator()
+
+        # -- named layouts (save / load / import / export / reset) ----------
+        self._m_layout = m.addMenu("Layout")
+        self._rebuild_layout_menu()
+
+        # -- optional data-source keys --------------------------------------
+        a_apis = QAction("API Keys…", self)
+        a_apis.triggered.connect(self._show_api_keys)
+        m.addAction(a_apis)
+
+        m.addSeparator()
+
+        # -- help / updates / about -----------------------------------------
+        a_guide = QAction("Keyboard Shortcuts && Guide…", self)
+        a_guide.setShortcut(QKeySequence.StandardKey.HelpContents)
+        a_guide.triggered.connect(self._show_onboarding)
+        m.addAction(a_guide)
+        a_update = QAction("Check for Updates…", self)
+        a_update.triggered.connect(self._check_for_updates)
+        m.addAction(a_update)
+        a_about = QAction("About findash", self)
+        a_about.triggered.connect(self._show_about)
+        m.addAction(a_about)
+
+        m.addSeparator()
+
         a_quit = QAction("&Quit", self)
         a_quit.setShortcut(QKeySequence.StandardKey.Quit)
         # real quit even when 'Close to tray' is on (that only intercepts the X)
         a_quit.triggered.connect(self._quit_app)
-        m_file.addAction(a_quit)
-        # Layout export/import/sharing all live in the Layout menu.
+        m.addAction(a_quit)
 
-        # in-app named layouts (no folder picking)
-        self._m_layout = self._menubar.addMenu("&Layout")
-        self._rebuild_layout_menu()
+    def _on_colorblind_toggled(self, on: bool) -> None:
+        """Persist the color-blind choice and restart (same as a theme switch,
+        since the palette is chosen once at import)."""
+        from .theme import colorblind_enabled, set_colorblind
 
-        self._m_panels = self._menubar.addMenu("&Panels")
-        self._rebuild_panels_menu()
+        on = bool(on)
+        if on == colorblind_enabled():
+            return
+        resp = QMessageBox.question(
+            self,
+            "Color-blind mode",
+            f"{'Enable' if on else 'Disable'} color-blind mode?\n\nfindash needs "
+            "to restart to apply it — your workspace will be restored "
+            "automatically.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            # undo the menu check without re-triggering this handler
+            self._colorblind_act.blockSignals(True)
+            self._colorblind_act.setChecked(colorblind_enabled())
+            self._colorblind_act.blockSignals(False)
+            return
+        set_colorblind(on)
+        self._restart_app()
 
-        self._build_view_menu()
-
-        # optional data-source keys, with live connected/not-connected status
-        self._m_apis = self._menubar.addMenu("&APIs")
-        self._m_apis.aboutToShow.connect(self._rebuild_apis_menu)
-        self._rebuild_apis_menu()
-
-        m_help = self._menubar.addMenu("&Help")
-        a_guide = QAction("Keyboard Shortcuts && Guide…", self)
-        a_guide.setShortcut(QKeySequence.StandardKey.HelpContents)
-        a_guide.triggered.connect(self._show_onboarding)
-        m_help.addAction(a_guide)
-        m_help.addSeparator()
-        a_update = QAction("Check for Updates…", self)
-        a_update.triggered.connect(self._check_for_updates)
-        a_about = QAction("About findash", self)
-        a_about.triggered.connect(self._show_about)
-        m_help.addAction(a_update)
-        m_help.addSeparator()
-        m_help.addAction(a_about)
-
-    def _rebuild_apis_menu(self) -> None:
-        from .settings_dialog import API_KEYS
-
-        m = self._m_apis
-        m.clear()
-        a_connect = QAction("Connect API Keys…", self)
-        a_connect.triggered.connect(self._show_api_keys)
-        m.addAction(a_connect)
-        m.addSeparator()
-        for env, name, _blurb, _url in API_KEYS:
-            state = "connected ✓" if os.environ.get(env) else "not connected"
-            status = QAction(f"{name} — {state}", self)
-            status.setEnabled(False)
-            m.addAction(status)
+    def _set_close_to_tray(self, on: bool) -> None:
+        """Single source of truth for the 'close to tray' preference, kept in
+        sync between the Settings menu item and the tray context menu."""
+        on = bool(on)
+        QSettings().setValue("tray/close_to_tray", on)
+        for act in (
+            getattr(self, "_close_to_tray_act", None),
+            getattr(self, "_settings_tray_act", None),
+        ):
+            if act is not None and act.isChecked() != on:
+                act.blockSignals(True)
+                act.setChecked(on)
+                act.blockSignals(False)
 
     def _show_api_keys(self) -> None:
         from .settings_dialog import ApiKeysDialog
@@ -569,7 +681,7 @@ class MainWindow(QMainWindow):
             "<li><b>NewsAPI.org</b> — richer news coverage</li>"
             "</ul>"
             "Each takes about a minute to set up. You can connect (or "
-            "disconnect) anytime from the <b>APIs</b> menu."
+            "disconnect) anytime from <b>Settings ▸ API Keys…</b>"
         )
         connect = box.addButton(
             "Connect now…", QMessageBox.ButtonRole.AcceptRole
@@ -716,26 +828,6 @@ class MainWindow(QMainWindow):
                     lambda _=False, pid=meta.id: self.add_panel(pid)
                 )
                 sub.addAction(act)
-
-    def _build_view_menu(self) -> None:
-        """View ▸ Theme ▸ Dark/Light. Switching persists the choice and restarts
-        the app so the whole UI — charts included — renders in one theme."""
-        from .theme import THEMES, current_theme
-
-        m_view = self._menubar.addMenu("&View")
-        theme_menu = m_view.addMenu("Theme")
-        self._theme_group = QActionGroup(self)
-        self._theme_group.setExclusive(True)
-        cur = current_theme()
-        for name in THEMES:
-            act = QAction(name.capitalize(), self)
-            act.setCheckable(True)
-            act.setChecked(name == cur)
-            act.triggered.connect(
-                lambda _=False, n=name: self._on_theme_selected(n)
-            )
-            self._theme_group.addAction(act)
-            theme_menu.addAction(act)
 
     def _on_theme_selected(self, name: str) -> None:
         from .theme import current_theme, set_theme

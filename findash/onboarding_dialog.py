@@ -2,7 +2,7 @@
 
 A tabbed dialog with a keyboard & mouse cheat sheet and a short dashboard
 guide. Shown automatically on first launch (gated by a ``QSettings`` flag) and
-on demand from ``Help ▸ Keyboard Shortcuts & Guide…`` or the F1 key.
+on demand from ``Settings ▸ Keyboard Shortcuts & Guide…`` or the F1 key.
 
 The cheat sheet is hand-audited against the codebase — every shortcut listed is
 one the app actually binds (see ``app.py`` and ``panels/watchlist.py``) plus the
@@ -132,10 +132,17 @@ but never tear off into free-floating windows. Pin a panel to a window edge to
 turn it into a slide-out tab. Press <b>F11</b> to focus on one panel full-window,
 Esc or F11 to bring the rest back.</p>
 
-<h2>Theme</h2>
+<h2>Settings</h2>
+<p>Everything except <b>Panels</b> now lives under the <b>Settings</b> menu —
+theme, color-blind mode, layouts, API keys, the guide, updates, and quit.</p>
+
+<h2>Theme &amp; accessibility</h2>
 <p>Switch between the <b>dark</b> (default) and <b>light</b> theme under
-<b>View &#9656; Theme</b>. findash restarts to apply it, so the whole interface —
-charts included — matches the theme you pick.</p>
+<b>Settings &#9656; Theme</b>. findash restarts to apply it, so the whole
+interface — charts included — matches the theme you pick. <b>Settings &#9656;
+Color-blind mode</b> swaps the green/red up-down colors for a deuteranopia-safe
+blue/orange pair and adds <b>▲ / ▼</b> direction marks to change values, so
+direction reads without relying on color; it also restarts to apply.</p>
 
 <h2>Symbol search &amp; link groups</h2>
 <p>Each panel carries a colored <b>link badge</b> in its top-right corner. Panels
@@ -165,9 +172,9 @@ layout.</p>
 above 200</i>, or <i>TSLA change% below −5</i>). When a rule triggers, findash
 shows a tray notification — rules keep running in the background as long as the
 app is open, and each fires once until the condition resets. Right-click the tray
-icon to Show/Hide/Quit; turn on <b>Close to tray</b> there if you'd like the
-window's ✕ to minimize to the tray instead of quitting (off by default, so ✕
-quits as usual).</p>
+icon to Show/Hide/Quit; turn on <b>Close to tray</b> — there or under
+<b>Settings</b> — if you'd like the window's ✕ to minimize to the tray instead of
+quitting (off by default, so ✕ quits as usual).</p>
 
 <h2>Portfolio</h2>
 <p>In the <b>Positions</b> tab add a holding: symbol, <b>Qty</b>, <b>Price</b>,
@@ -199,15 +206,15 @@ remembered with the layout). The Financials panel additionally offers styled
 Excel export and clipboard copy from its toolbar.</p>
 
 <h2>Layouts</h2>
-<p>Use the <b>Layout</b> menu to save the current arrangement under a name
+<p>Use <b>Settings &#9656; Layout</b> to save the current arrangement under a name
 (<b>Ctrl+S</b>), reload a saved one, or reset to the default. Layouts can be
 exported to a shareable <code>.findashlayout</code> file and imported on another
 machine. Your last arrangement is auto-saved and restored on the next launch.</p>
 
 <h2>Data sources</h2>
 <p>findash runs out of the box on free, keyless sources (Yahoo Finance, Google
-News — delayed). Connect optional free API keys from the <b>APIs</b> menu
-(Finnhub, Twelve Data, FRED, EIA, NewsAPI) for richer, faster data. Press
+News — delayed). Connect optional free API keys from <b>Settings &#9656; API
+Keys…</b> (Finnhub, Twelve Data, FRED, EIA, NewsAPI) for richer, faster data. Press
 <b>F5</b> anytime to force-refresh every live feed. Recently-seen data is cached
 locally, so panels fill in instantly on the next launch — even offline — before
 a fresh refresh runs.</p>

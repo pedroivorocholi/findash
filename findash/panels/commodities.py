@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from ..components import MarketTable, make_filter_edit
 from ..panel import Panel, register_panel
 from ..undo import UndoStack
-from ..theme import ACCENT, BG_HEADER, DOWN, FG_DIM, UP
+from ..theme import ACCENT, BG_HEADER, FG_DIM, apply_tick
 
 DEFAULT_ENERGY = [
     ["WTI", "CL=F"],
@@ -224,9 +224,8 @@ class CommoditiesPanel(Panel):
         range_item.setText(_fmt_range(day_low, day_high))
 
         if change is not None:
-            color = QColor(UP) if change >= 0 else QColor(DOWN)
-            chg_item.setForeground(color)
-            pct_item.setForeground(color)
+            apply_tick(chg_item, change, glyph=False)
+            apply_tick(pct_item, change)
         else:
             dim = QColor(FG_DIM)
             chg_item.setForeground(dim)

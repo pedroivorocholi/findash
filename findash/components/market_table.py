@@ -54,6 +54,8 @@ def parse_numeric(text: str) -> float | None:
     s = (text or "").strip()
     if not s or s in {"-", "—", "N/A", "n/a"}:
         return None
+    # strip the color-blind direction glyphs first — a cell may read "▲ +1.2%"
+    s = s.replace("▲", "").replace("▼", "").strip()
     neg = s.startswith("(") and s.endswith(")")
     s = s.strip("()")
     for ch in (",", "$", "%", "+", " "):

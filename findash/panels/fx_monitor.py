@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 from ..components import MarketTable, make_filter_edit
 from ..undo import UndoStack
 from ..panel import Panel, register_panel
-from ..theme import ACCENT, BG_HEADER, DOWN, FG_DIM, UP
+from ..theme import ACCENT, BG_HEADER, FG_DIM, apply_tick
 
 DEFAULT_MAJORS = [
     ["EUR/USD", "EURUSD=X"],
@@ -232,9 +232,8 @@ class FXMonitorPanel(Panel):
         pct_item.setText(f"{_fmt_num(change_pct)}%" if change_pct is not None else "-")
 
         if change is not None:
-            color = QColor(UP) if change >= 0 else QColor(DOWN)
-            chg_item.setForeground(color)
-            pct_item.setForeground(color)
+            apply_tick(chg_item, change, glyph=False)
+            apply_tick(pct_item, change)
         else:
             dim = QColor(FG_DIM)
             chg_item.setForeground(dim)

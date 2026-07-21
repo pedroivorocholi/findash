@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
-from ..theme import ACCENT, DOWN, FG_DIM, UP
+from ..theme import ACCENT, FG_DIM, UP, apply_tick
 
 HEADERS = ["Date", "EPS Est", "EPS Actual", "Surprise%"]
 
@@ -110,7 +110,7 @@ class EarningsPanel(Panel):
                 surprise_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 try:
                     if surprise is not None:
-                        surprise_item.setForeground(QColor(UP if float(surprise) >= 0 else DOWN))
+                        apply_tick(surprise_item, float(surprise))
                 except (TypeError, ValueError):
                     pass
                 self.table.setItem(r, 3, surprise_item)

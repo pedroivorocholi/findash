@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
 from ..undo import UndoStack
-from ..theme import ACCENT, DOWN, UP
+from ..theme import ACCENT, apply_tick
 
 DEFAULT_SYMBOLS = [
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA",
@@ -164,9 +164,8 @@ class WatchlistPanel(Panel):
             cells["pct"].setText(f"{_fmt_num(change_pct)}%" if change_pct is not None else "-")
             cells["vol"].setText(_fmt_volume(volume))
             if change is not None:
-                color = QColor(UP) if change >= 0 else QColor(DOWN)
-                cells["chg"].setForeground(color)
-                cells["pct"].setForeground(color)
+                apply_tick(cells["chg"], change, glyph=False)
+                apply_tick(cells["pct"], change)
         # a re-sort can drop row-hidden flags, so re-assert an active filter
         if self._filter.text().strip():
             self.table.apply_filter(self._filter.text())
