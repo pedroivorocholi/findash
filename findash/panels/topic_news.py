@@ -1,24 +1,25 @@
 """Topic News panel — free-text news query, independent of the linked
 symbol. Layouts can preconfigure instances with different queries (e.g.
 "Brazil", "energy commodities") via ``settings()``/``restore()``.
+
+Shares the symbol News panel's filter box, read/unread dimming, and on-click
+preview (see ``NewsPanelBase``); adds its own query field on top.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QUrl
-from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton
 
-from ..panel import Panel, register_panel
-from ._news_common import make_news_table, news_url_at, populate_news_table
+from ..panel import register_panel
+from ._news_common import NewsPanelBase
 
 DEFAULT_QUERY = "markets"
 
 
 @register_panel(id="topic_news", title="Topic News", category="News")
-class TopicNewsPanel(Panel):
+class TopicNewsPanel(NewsPanelBase):
     def build(self) -> None:
         self._query = DEFAULT_QUERY
 
@@ -33,9 +34,7 @@ class TopicNewsPanel(Panel):
         query_row.addWidget(set_btn)
         self.content_layout.addLayout(query_row)
 
-        self.table = make_news_table(self)
-        self.table.cellDoubleClicked.connect(self._open_row)
-        self.content_layout.addWidget(self.table, 1)
+        self._build_news_ui()
 
         self._apply_query()
 
@@ -50,22 +49,20 @@ class TopicNewsPanel(Panel):
         self.subscribe(f"newsq:{query}", self._on_news)
 
     def _on_news(self, data: Any) -> None:
-        count = populate_news_table(self.table, data)
+        count = self._render_news(data)
         suffix = f"{count} headlines" if count else "no news"
         self.set_status(f"{self._query} · {suffix}")
-
-    def _open_row(self, row: int, _column: int) -> None:
-        url = news_url_at(self.table, row)
-        if url:
-            QDesktopServices.openUrl(QUrl(url))
 
     # -- persistence -------------------------------------------------------------
 
     def settings(self) -> dict:
-        return {"query": self._query}
+        return {"query": self._query, "read": self._read_state()}
 
     def restore(self, settings: dict) -> None:
-        query = settings.get("query") if isinstance(settings, dict) else None
+        if not isinstance(settings, dict):
+            return
+        self._restore_read(settings.get("read"))
+        query = settings.get("query")
         if isinstance(query, str) and query.strip():
             self.query_edit.setText(query.strip())
             self._apply_query()

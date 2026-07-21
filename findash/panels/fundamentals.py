@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
-from ..components import MarketTable
+from ..components import MarketTable, make_filter_edit
 from ..panel import Panel, register_panel
 from ..theme import DOWN
 
@@ -122,6 +122,9 @@ class FundamentalsPanel(Panel):
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+
+        self._filter = make_filter_edit(self.table, "Find line item…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
     # -- statement / period toggles -------------------------------------------
@@ -203,6 +206,8 @@ class FundamentalsPanel(Panel):
                 except (TypeError, ValueError):
                     pass
                 self.table.setItem(r, col + 1, item)
+
+        self.table.apply_filter(self._filter.text())
 
         sym = self.current_symbol or "—"
         stmt_label = dict(STATEMENTS).get(self._statement, self._statement)

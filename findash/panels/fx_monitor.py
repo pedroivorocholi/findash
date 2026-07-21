@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..components import MarketTable
+from ..components import MarketTable, make_filter_edit
+from ..undo import UndoStack
 from ..panel import Panel, register_panel
 from ..theme import ACCENT, BG_HEADER, DOWN, FG_DIM, UP
 
@@ -143,6 +144,10 @@ class FXMonitorPanel(Panel):
         for col in (COL_LAST, COL_CHG, COL_CHGPCT):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter pairs…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
         edit_row = QHBoxLayout()
@@ -171,6 +176,9 @@ class FXMonitorPanel(Panel):
         self._append_group_header("Other")
         for label, sym in self._other:
             self._append_data_row(label, sym)
+
+        if hasattr(self, "_filter"):
+            self.table.apply_filter(self._filter.text())
 
         for _label, sym in self._majors + self._other:
             self.subscribe(f"quote:{sym}", lambda data, s=sym: self._on_quote(s, data))
@@ -253,6 +261,16 @@ class FXMonitorPanel(Panel):
             majors = dlg.result_majors()
             other = dlg.result_other()
             if majors or other:
+                snap_m = [list(r) for r in self._majors]
+                snap_o = [list(r) for r in self._other]
+
+                def _undo() -> None:
+                    self._majors = [list(r) for r in snap_m]
+                    self._other = [list(r) for r in snap_o]
+                    self._rebuild_table()
+                    self.set_status("undo · edit FX")
+
+                UndoStack.instance().push("edit FX", _undo)
                 self._majors = majors or self._majors
                 self._other = other or self._other
                 self._rebuild_table()
@@ -260,7 +278,11 @@ class FXMonitorPanel(Panel):
     # -- persistence -------------------------------------------------------------
 
     def settings(self) -> dict:
-        return {"majors": [list(r) for r in self._majors], "other": [list(r) for r in self._other]}
+        return {
+            "majors": [list(r) for r in self._majors],
+            "other": [list(r) for r in self._other],
+            "hidden_cols": self.table.hidden_columns(),
+        }
 
     def restore(self, settings: dict) -> None:
         if not isinstance(settings, dict):
@@ -280,3 +302,4 @@ class FXMonitorPanel(Panel):
                 changed = True
         if changed:
             self._rebuild_table()
+        self.table.set_hidden_columns(settings.get("hidden_cols", []))

@@ -1,41 +1,68 @@
 """Options Chain panel — Bloomberg OMON-lite: expiry picker + spot label
 above two side-by-side read-only tables (calls / puts). The ATM strike row
 (closest to spot) is highlighted; ITM rows get a subtle tint.
+
+Greeks (Δ delta, Γ gamma, Θ theta/day, Vega per 1% vol) are computed on the fly
+via Black–Scholes (pure Python — no scipy) from spot, strike, implied vol and
+time to expiry. The Greek columns are hidden by default; right-click a table
+header (Columns) to show them, and the choice persists with the layout.
 """
 
 from __future__ import annotations
 
+import math
+from datetime import date
 from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
 )
 
+from ..components import MarketTable
 from ..panel import Panel, register_panel
 from ..theme import BG_HEADER
 
-# calls: Vol | OI | IV% | Bid | Ask | Last | Strike
-CALL_HEADERS = ["Vol", "OI", "IV%", "Bid", "Ask", "Last", "Strike"]
-CALL_COL_VOL, CALL_COL_OI, CALL_COL_IV, CALL_COL_BID, CALL_COL_ASK, CALL_COL_LAST, CALL_COL_STRIKE = range(7)
+# calls: Vol | OI | IV% | Δ | Γ | Θ | Vega | Bid | Ask | Last | Strike
+CALL_HEADERS = ["Vol", "OI", "IV%", "Δ", "Γ", "Θ", "Vega", "Bid", "Ask", "Last", "Strike"]
+(CALL_COL_VOL, CALL_COL_OI, CALL_COL_IV, CALL_COL_DELTA, CALL_COL_GAMMA,
+ CALL_COL_THETA, CALL_COL_VEGA, CALL_COL_BID, CALL_COL_ASK, CALL_COL_LAST,
+ CALL_COL_STRIKE) = range(11)
+CALL_GREEK_COLS = (CALL_COL_DELTA, CALL_COL_GAMMA, CALL_COL_THETA, CALL_COL_VEGA)
 
-# puts: Strike | Last | Bid | Ask | IV% | OI | Vol
-PUT_HEADERS = ["Strike", "Last", "Bid", "Ask", "IV%", "OI", "Vol"]
-PUT_COL_STRIKE, PUT_COL_LAST, PUT_COL_BID, PUT_COL_ASK, PUT_COL_IV, PUT_COL_OI, PUT_COL_VOL = range(7)
+# puts: Strike | Last | Bid | Ask | Δ | Γ | Θ | Vega | IV% | OI | Vol
+PUT_HEADERS = ["Strike", "Last", "Bid", "Ask", "Δ", "Γ", "Θ", "Vega", "IV%", "OI", "Vol"]
+(PUT_COL_STRIKE, PUT_COL_LAST, PUT_COL_BID, PUT_COL_ASK, PUT_COL_DELTA,
+ PUT_COL_GAMMA, PUT_COL_THETA, PUT_COL_VEGA, PUT_COL_IV, PUT_COL_OI,
+ PUT_COL_VOL) = range(11)
+PUT_GREEK_COLS = (PUT_COL_DELTA, PUT_COL_GAMMA, PUT_COL_THETA, PUT_COL_VEGA)
 
 # payload row layout: [strike, last, bid, ask, volume, open_interest, iv_pct]
 ROW_STRIKE, ROW_LAST, ROW_BID, ROW_ASK, ROW_VOLUME, ROW_OI, ROW_IV = range(7)
 
 _ITM_TINT_CALL = "#1c2b22"   # very subtle green tint
 _ITM_TINT_PUT = "#2b1c1c"    # very subtle red tint
+
+_RISK_FREE = 0.04  # flat short-rate assumption for the Greeks
+
+# plain-language explanations shown on header hover
+HEADER_TIPS = {
+    "Δ": "Delta — how much the option price moves per $1 move in the underlying",
+    "Γ": "Gamma — how much delta itself moves per $1 move in the underlying",
+    "Θ": "Theta — option value lost to time decay, per day",
+    "Vega": "Vega — option price change per 1 percentage-point change in implied volatility",
+    "IV%": "Implied volatility — the market's expected annualized volatility (%)",
+    "OI": "Open interest — number of contracts currently outstanding",
+    "Vol": "Volume — contracts traded so far today",
+    "Bid": "Highest price a buyer is currently offering",
+    "Ask": "Lowest price a seller is currently asking",
+    "Strike": "Strike price — the price at which the option can be exercised",
+}
 
 
 def _fmt_num(value: Any, decimals: int = 2) -> str:
@@ -62,6 +89,52 @@ def _row_field(row: Any, idx: int) -> Any:
     return row[idx]
 
 
+def years_to_expiry(expiry: Any, today: date | None = None) -> float | None:
+    """Fractional years from today to an ``YYYY-MM-DD`` expiry, or None if the
+    date is unparseable or not in the future (Greeks are unstable at/after
+    expiry)."""
+    try:
+        y, m, d = (int(p) for p in str(expiry).split("-")[:3])
+        exp = date(y, m, d)
+    except (TypeError, ValueError):
+        return None
+    days = (exp - (today or date.today())).days
+    return days / 365.0 if days > 0 else None
+
+
+def _norm_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def bs_greeks(
+    spot: Any, strike: Any, iv_pct: Any, t_years: Any, is_call: bool,
+    r: float = _RISK_FREE,
+) -> tuple:
+    """Black–Scholes (delta, gamma, theta_per_day, vega_per_1pct) for one
+    option, or a 4-tuple of None when inputs are missing/degenerate."""
+    none4 = (None, None, None, None)
+    try:
+        s = float(spot); k = float(strike); sigma = float(iv_pct) / 100.0
+        t = float(t_years)
+    except (TypeError, ValueError):
+        return none4
+    if s <= 0 or k <= 0 or sigma <= 0 or t <= 0:
+        return none4
+    sqrt_t = math.sqrt(t)
+    d1 = (math.log(s / k) + (r + 0.5 * sigma * sigma) * t) / (sigma * sqrt_t)
+    d2 = d1 - sigma * sqrt_t
+    pdf_d1 = math.exp(-0.5 * d1 * d1) / math.sqrt(2.0 * math.pi)
+    delta = _norm_cdf(d1) if is_call else _norm_cdf(d1) - 1.0
+    gamma = pdf_d1 / (s * sigma * sqrt_t)
+    vega = s * pdf_d1 * sqrt_t * 0.01  # per 1 vol point
+    term = -s * pdf_d1 * sigma / (2.0 * sqrt_t)
+    if is_call:
+        theta = (term - r * k * math.exp(-r * t) * _norm_cdf(d2)) / 365.0
+    else:
+        theta = (term + r * k * math.exp(-r * t) * _norm_cdf(-d2)) / 365.0
+    return (delta, gamma, theta, vega)
+
+
 def _closest_strike_index(rows: list, spot: Any) -> int | None:
     if spot is None or not rows:
         return None
@@ -85,6 +158,14 @@ def _closest_strike_index(rows: list, spot: Any) -> int | None:
     return best_idx
 
 
+def _apply_header_tips(table) -> None:
+    """Attach plain-language tooltips to any header whose label is jargon."""
+    for c in range(table.columnCount()):
+        item = table.horizontalHeaderItem(c)
+        if item is not None and item.text() in HEADER_TIPS:
+            item.setToolTip(HEADER_TIPS[item.text()])
+
+
 def _make_item(text: str) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -98,6 +179,7 @@ class OptionsChainPanel(Panel):
         self._expiries: list[str] = []
         self._current_expiry: str = ""
         self._spot: Any = None
+        self._t_years: float | None = None
 
         # -- header row: expiry combo + spot label ---------------------------
         header_row = QHBoxLayout()
@@ -114,26 +196,29 @@ class OptionsChainPanel(Panel):
         # -- calls / puts tables side by side ---------------------------------
         tables_row = QHBoxLayout()
 
-        self.calls_table = QTableWidget(0, len(CALL_HEADERS), self)
+        self.calls_table = MarketTable(0, len(CALL_HEADERS), self)
         self.calls_table.setHorizontalHeaderLabels(CALL_HEADERS)
         self._configure_table(self.calls_table)
         tables_row.addWidget(self.calls_table, 1)
 
-        self.puts_table = QTableWidget(0, len(PUT_HEADERS), self)
+        self.puts_table = MarketTable(0, len(PUT_HEADERS), self)
         self.puts_table.setHorizontalHeaderLabels(PUT_HEADERS)
         self._configure_table(self.puts_table)
         tables_row.addWidget(self.puts_table, 1)
 
+        _apply_header_tips(self.calls_table)
+        _apply_header_tips(self.puts_table)
+
         self.content_layout.addLayout(tables_row, 1)
 
+        # Greeks off by default — right-click a header ▸ Columns to reveal them.
+        self.calls_table.set_hidden_columns(CALL_GREEK_COLS)
+        self.puts_table.set_hidden_columns(PUT_GREEK_COLS)
+
     @staticmethod
-    def _configure_table(table: QTableWidget) -> None:
-        table.verticalHeader().setVisible(False)
-        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        table.setAlternatingRowColors(True)
+    def _configure_table(table: MarketTable) -> None:
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.enable_column_menu()
 
     # -- symbol / subscription lifecycle -------------------------------------
 
@@ -142,6 +227,7 @@ class OptionsChainPanel(Panel):
         self._expiries = []
         self._current_expiry = ""
         self._spot = None
+        self._t_years = None
         self.expiry_combo.blockSignals(True)
         self.expiry_combo.clear()
         self.expiry_combo.blockSignals(False)
@@ -180,6 +266,9 @@ class OptionsChainPanel(Panel):
         if isinstance(expiries, list) and expiries:
             self._populate_expiry_combo(expiries, expiry)
 
+        # time to expiry for the Greeks (from the payload's expiry, else the combo)
+        self._t_years = years_to_expiry(expiry or self._current_expiry)
+
         calls = data.get("calls") if isinstance(data.get("calls"), list) else []
         puts = data.get("puts") if isinstance(data.get("puts"), list) else []
 
@@ -217,22 +306,23 @@ class OptionsChainPanel(Panel):
         self.calls_table.setRowCount(0)
         for i, row in enumerate(rows):
             strike = _row_field(row, ROW_STRIKE)
-            last = _row_field(row, ROW_LAST)
-            bid = _row_field(row, ROW_BID)
-            ask = _row_field(row, ROW_ASK)
-            volume = _row_field(row, ROW_VOLUME)
-            oi = _row_field(row, ROW_OI)
             iv = _row_field(row, ROW_IV)
-
+            delta, gamma, theta, vega = bs_greeks(
+                spot, strike, iv, self._t_years, is_call=True
+            )
             r = self.calls_table.rowCount()
             self.calls_table.insertRow(r)
             values = {
-                CALL_COL_VOL: _fmt_int(volume),
-                CALL_COL_OI: _fmt_int(oi),
+                CALL_COL_VOL: _fmt_int(_row_field(row, ROW_VOLUME)),
+                CALL_COL_OI: _fmt_int(_row_field(row, ROW_OI)),
                 CALL_COL_IV: _fmt_num(iv, 1),
-                CALL_COL_BID: _fmt_num(bid),
-                CALL_COL_ASK: _fmt_num(ask),
-                CALL_COL_LAST: _fmt_num(last),
+                CALL_COL_DELTA: _fmt_num(delta, 3),
+                CALL_COL_GAMMA: _fmt_num(gamma, 4),
+                CALL_COL_THETA: _fmt_num(theta, 3),
+                CALL_COL_VEGA: _fmt_num(vega, 3),
+                CALL_COL_BID: _fmt_num(_row_field(row, ROW_BID)),
+                CALL_COL_ASK: _fmt_num(_row_field(row, ROW_ASK)),
+                CALL_COL_LAST: _fmt_num(_row_field(row, ROW_LAST)),
                 CALL_COL_STRIKE: _fmt_num(strike),
             }
             is_itm = _is_itm(strike, spot, is_call=True)
@@ -247,23 +337,24 @@ class OptionsChainPanel(Panel):
         self.puts_table.setRowCount(0)
         for i, row in enumerate(rows):
             strike = _row_field(row, ROW_STRIKE)
-            last = _row_field(row, ROW_LAST)
-            bid = _row_field(row, ROW_BID)
-            ask = _row_field(row, ROW_ASK)
-            volume = _row_field(row, ROW_VOLUME)
-            oi = _row_field(row, ROW_OI)
             iv = _row_field(row, ROW_IV)
-
+            delta, gamma, theta, vega = bs_greeks(
+                spot, strike, iv, self._t_years, is_call=False
+            )
             r = self.puts_table.rowCount()
             self.puts_table.insertRow(r)
             values = {
                 PUT_COL_STRIKE: _fmt_num(strike),
-                PUT_COL_LAST: _fmt_num(last),
-                PUT_COL_BID: _fmt_num(bid),
-                PUT_COL_ASK: _fmt_num(ask),
+                PUT_COL_LAST: _fmt_num(_row_field(row, ROW_LAST)),
+                PUT_COL_BID: _fmt_num(_row_field(row, ROW_BID)),
+                PUT_COL_ASK: _fmt_num(_row_field(row, ROW_ASK)),
+                PUT_COL_DELTA: _fmt_num(delta, 3),
+                PUT_COL_GAMMA: _fmt_num(gamma, 4),
+                PUT_COL_THETA: _fmt_num(theta, 3),
+                PUT_COL_VEGA: _fmt_num(vega, 3),
                 PUT_COL_IV: _fmt_num(iv, 1),
-                PUT_COL_OI: _fmt_int(oi),
-                PUT_COL_VOL: _fmt_int(volume),
+                PUT_COL_OI: _fmt_int(_row_field(row, ROW_OI)),
+                PUT_COL_VOL: _fmt_int(_row_field(row, ROW_VOLUME)),
             }
             is_itm = _is_itm(strike, spot, is_call=False)
             is_atm = i == atm_idx
@@ -278,6 +369,22 @@ class OptionsChainPanel(Panel):
             item.setBackground(QColor(BG_HEADER))
         elif is_itm:
             item.setBackground(QColor(_ITM_TINT_CALL if is_call else _ITM_TINT_PUT))
+
+    # -- persistence ---------------------------------------------------------
+
+    def settings(self) -> dict:
+        return {
+            "calls_hidden": self.calls_table.hidden_columns(),
+            "puts_hidden": self.puts_table.hidden_columns(),
+        }
+
+    def restore(self, settings: dict) -> None:
+        if not isinstance(settings, dict):
+            return
+        if "calls_hidden" in settings:
+            self.calls_table.set_hidden_columns(settings.get("calls_hidden", []))
+        if "puts_hidden" in settings:
+            self.puts_table.set_hidden_columns(settings.get("puts_hidden", []))
 
 
 def _is_itm(strike: Any, spot: Any, is_call: bool) -> bool:

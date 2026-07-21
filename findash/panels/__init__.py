@@ -8,6 +8,7 @@ survive packaging.
 """
 
 BUILTIN = (
+    "alerts",
     "analyst",
     "chart",
     "chart_grid",

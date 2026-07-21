@@ -59,13 +59,16 @@ _SHORTCUTS_HTML = _page_css() + f"""
 <h2>Global</h2>
 <table>
   {_row(_kbd("Ctrl", "F"), "Jump to the SYMBOL box and select its text")}
-  {_row(_kbd("Enter"), "In the SYMBOL box: send the ticker to every linked panel")}
+  {_row(_kbd("Enter"), "In the SYMBOL box: send the ticker (or run a /command)")}
+  {_row(_kbd("↑") + " / " + _kbd("↓"), "In the SYMBOL box: recall previous entries")}
+  {_row(_kbd("Tab"), "In the SYMBOL box: autocomplete a symbol or /command")}
   {_row(_kbd("F5"), "Refresh all live feeds (quotes, news, charts, financials)")}
   {_row(_kbd("F11"), "Maximize the focused panel — press again to restore")}
   {_row(_kbd("Esc"), "Restore a maximized panel")}
   {_row(_kbd("Ctrl", "W"), "Close the focused panel")}
   {_row(_kbd("Ctrl", "Shift", "T"), "Reopen the last panel you closed")}
   {_row(_kbd("F1"), "Open this Keyboard Shortcuts &amp; Guide window")}
+  {_row(_kbd("Ctrl", "Z"), "Undo the last edit — drawing, watchlist / portfolio / monitor change")}
   {_row(_kbd("Ctrl", "S"), "Save the current layout under a name")}
   {_row(_kbd("Ctrl", "Q"), "Quit findash")}
 </table>
@@ -79,19 +82,22 @@ _SHORTCUTS_HTML = _page_css() + f"""
   {_row("Middle-click a tab", "Close that panel")}
 </table>
 
-<h2>Charts (PyQtGraph defaults)</h2>
+<h2>Charts</h2>
 <table>
+  {_row("Move the mouse", "Crosshair snaps to the nearest bar with a date + O/H/L/C readout")}
   {_row("Left-drag", "Pan the view")}
   {_row("Mouse wheel", "Zoom in / out")}
   {_row("Right-drag", "Scale the axes independently")}
-  {_row("Right-click", "Chart menu — view options, export image/data")}
+  {_row("Right-click", "Chart menu — type, colors, drawing tools, export image")}
+  {_row("Right-click &#9656; Drawing", "Trendline, horizontal line, or channels — points snap to candles; saved with the layout")}
   {_row("“A” button (bottom-left)", "Auto-range: reset the view to fit the data")}
 </table>
 
 <h2>Tables</h2>
 <table>
-  {_row("Right-click", "Export Table to CSV…")}
-  {_row("Click header", "Sort / resize columns (where enabled)")}
+  {_row("Filter box (above a table)", "Type to show only matching rows — live substring match")}
+  {_row("Click a header", "Sort by that column; click again to reverse (sortable tables)")}
+  {_row("Right-click", "Export to CSV, or show/hide individual columns")}
   {_row(_kbd("↑"), "/ " + _kbd("↓") + " — move the row selection")}
 </table>
 
@@ -111,6 +117,14 @@ at the top and press Enter. Every panel in the same <i>link group</i> updates to
 that symbol at once. A fresh install opens to an empty workspace — add panels
 from the <b>Panels</b> menu.</p>
 
+<h2>The command bar</h2>
+<p>The SYMBOL box up top is also a command line. Type a ticker and press Enter to
+drive the linked panels, or type a <b>/command</b>: <code>/add &lt;panel&gt;</code>
+opens a panel, <code>/layout &lt;name&gt;</code> loads a saved layout,
+<code>/save &lt;name&gt;</code> saves the current one, and <code>/refresh</code>
+reloads every feed. Press <b>Tab</b> to autocomplete a symbol or command, and
+<b>↑ / ↓</b> to recall what you typed before (remembered across sessions).</p>
+
 <h2>Arranging your workspace</h2>
 <p>Drag a panel by its tab to move and snap it beside, above, or below another
 panel; drop it onto a tab strip to stack them as tabs. Panels relocate and snap
@@ -129,11 +143,60 @@ in the same group share a symbol, so clicking a name in one (a mover, a holding,
 a commodity) drives the others. Use the badge to move a panel to another group,
 or Unlink it so it navigates on its own.</p>
 
-<h2>Tables &amp; CSV export</h2>
-<p>Any data table can be exported: right-click it and choose
-<b>Export Table to CSV…</b>. The file contains the column headers and every row
-exactly as shown. The Financials panel additionally offers styled Excel export
-and clipboard copy from its toolbar.</p>
+<h2>Charts</h2>
+<p>Hover the price chart to read any bar: a <b>crosshair</b> snaps to the nearest
+candle and shows its date and open/high/low/close in the corner. Right-click the
+chart for type (candles, bars, line, area), colors, indicators, and
+<b>Drawing</b> tools: a <i>trendline</i>, a <i>horizontal line</i>, or a
+<i>channel</i> (parallel, flat-bottom, disjoint). Pick a tool, then click to place
+its points — each click <b>snaps to the nearest candle</b>, and the shape follows
+your cursor between clicks. Drawings are <b>blue</b> by default (change it under
+Drawing &#9656; Drawing color…) and are saved with the layout for that symbol.</p>
+
+<h2>News</h2>
+<p>In a News or Topic News panel, <b>single-click</b> a headline for a quick
+preview snippet below the list — the headline dims once you've read it.
+<b>Double-click</b> to open the full article in your browser. The filter box
+narrows the headlines live, and read/unread state is remembered with the
+layout.</p>
+
+<h2>Price alerts &amp; the tray</h2>
+<p>Add a <b>Price Alerts</b> panel to set threshold rules (e.g. <i>AAPL price
+above 200</i>, or <i>TSLA change% below −5</i>). When a rule triggers, findash
+shows a tray notification — rules keep running in the background as long as the
+app is open, and each fires once until the condition resets. Right-click the tray
+icon to Show/Hide/Quit; turn on <b>Close to tray</b> there if you'd like the
+window's ✕ to minimize to the tray instead of quitting (off by default, so ✕
+quits as usual).</p>
+
+<h2>Portfolio</h2>
+<p>In the <b>Positions</b> tab add a holding: symbol, <b>Qty</b>, <b>Price</b>,
+and a <b>Buy date</b>. Leave Price on <i>market</i> to use the current quote as
+your cost basis. Positions mark to live quotes with running P&amp;L; select one
+and <b>Mark sold</b> to close it as of today. The analytics tabs read the book:
+<b>Allocation</b> shows a sector pie of open positions, <b>Performance</b> charts
+the portfolio value <i>from your earliest buy date</i> (counting each position
+only while held) rebased to 100 against SPY, and <b>Risk</b> reports weighted
+beta, largest-position concentration, and max drawdown. Those tabs start pulling
+data only when first opened.</p>
+
+<h2>Options &amp; Greeks</h2>
+<p>The Options Chain panel shows calls and puts around the spot, with the ATM
+strike highlighted. Greek columns — <b>Δ</b> delta, <b>Γ</b> gamma, <b>Θ</b>
+theta (per day) and <b>Vega</b> (per 1% vol) — are computed with Black–Scholes
+and hidden by default; right-click a table header and use <b>Columns</b> to show
+them (the choice is saved with the layout).</p>
+
+<h2>Tables: sort, filter &amp; columns</h2>
+<p>Flat tables (Watchlist, Movers, Holders, Earnings, Analyst) <b>sort</b> when
+you click a column header — click again to reverse. Numbers sort as numbers, so
+<b>1.2M</b> ranks above <b>900K</b>. Grouped monitors (Commodities, FX, World
+Indices) and the Financials statement keep their natural order and aren't
+sortable, but <i>every</i> table has a <b>filter box</b> above it: start typing
+to show only the rows that match. Right-click any table to
+<b>Export Table to CSV…</b> or to <b>show/hide columns</b> (your choice is
+remembered with the layout). The Financials panel additionally offers styled
+Excel export and clipboard copy from its toolbar.</p>
 
 <h2>Layouts</h2>
 <p>Use the <b>Layout</b> menu to save the current arrangement under a name

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
-from ..components import MarketTable
+from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
 from ..theme import ACCENT, DOWN, FG_DIM, UP
 
@@ -50,6 +50,11 @@ class EarningsPanel(Panel):
         self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.enable_sorting()
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter by date…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
     def on_symbol(self, symbol: str) -> None:
@@ -67,47 +72,58 @@ class EarningsPanel(Panel):
 
         rows = data.get("rows")
         rows = rows if isinstance(rows, list) else []
-        self.table.setRowCount(0)
-        for row_data in rows:
-            if not isinstance(row_data, (list, tuple)) or len(row_data) < 4:
-                continue
-            date, est, actual, surprise = row_data[0], row_data[1], row_data[2], row_data[3]
-            r = self.table.rowCount()
-            self.table.insertRow(r)
+        with self.table.bulk_update():
+            self.table.setRowCount(0)
+            for row_data in rows:
+                if not isinstance(row_data, (list, tuple)) or len(row_data) < 4:
+                    continue
+                date, est, actual, surprise = row_data[0], row_data[1], row_data[2], row_data[3]
+                r = self.table.rowCount()
+                self.table.insertRow(r)
 
-            date_item = QTableWidgetItem(str(date) if date is not None else "-")
-            date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            date_item.setForeground(QColor(FG_DIM))
-            self.table.setItem(r, 0, date_item)
+                date_item = QTableWidgetItem(str(date) if date is not None else "-")
+                date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                date_item.setForeground(QColor(FG_DIM))
+                self.table.setItem(r, 0, date_item)
 
-            est_item = QTableWidgetItem(_fmt_eps(est))
-            est_item.setFlags(est_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            est_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.table.setItem(r, 1, est_item)
+                est_item = NumericTableWidgetItem(_fmt_eps(est))
+                est_item.setFlags(est_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                est_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self.table.setItem(r, 1, est_item)
 
-            beat = False
-            try:
-                if est is not None and actual is not None:
-                    beat = float(actual) > float(est)
-            except (TypeError, ValueError):
                 beat = False
+                try:
+                    if est is not None and actual is not None:
+                        beat = float(actual) > float(est)
+                except (TypeError, ValueError):
+                    beat = False
 
-            actual_item = QTableWidgetItem(_fmt_eps(actual))
-            actual_item.setFlags(actual_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            actual_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            if actual is not None and beat:
-                actual_item.setForeground(QColor(UP))
-            self.table.setItem(r, 2, actual_item)
+                actual_item = NumericTableWidgetItem(_fmt_eps(actual))
+                actual_item.setFlags(actual_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                actual_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                if actual is not None and beat:
+                    actual_item.setForeground(QColor(UP))
+                self.table.setItem(r, 2, actual_item)
 
-            surprise_item = QTableWidgetItem(_fmt_pct(surprise))
-            surprise_item.setFlags(surprise_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            surprise_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            try:
-                if surprise is not None:
-                    surprise_item.setForeground(QColor(UP if float(surprise) >= 0 else DOWN))
-            except (TypeError, ValueError):
-                pass
-            self.table.setItem(r, 3, surprise_item)
+                surprise_item = NumericTableWidgetItem(_fmt_pct(surprise))
+                surprise_item.setFlags(surprise_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                surprise_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                try:
+                    if surprise is not None:
+                        surprise_item.setForeground(QColor(UP if float(surprise) >= 0 else DOWN))
+                except (TypeError, ValueError):
+                    pass
+                self.table.setItem(r, 3, surprise_item)
+        self.table.apply_filter(self._filter.text())
 
         sym = self.current_symbol or "—"
         self.set_status(f"{sym} · {len(rows)} reports")
+
+    # -- persistence ------------------------------------------------------------
+
+    def settings(self) -> dict:
+        return {"hidden_cols": self.table.hidden_columns()}
+
+    def restore(self, settings: dict) -> None:
+        if isinstance(settings, dict):
+            self.table.set_hidden_columns(settings.get("hidden_cols", []))

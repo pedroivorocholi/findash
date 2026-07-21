@@ -6,22 +6,28 @@ Underscore-prefixed so ``discover_panels`` skips it (it registers no panel).
 
 from __future__ import annotations
 
+import html as _html
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Optional
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+import requests
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
+    QLabel,
+    QLineEdit,
     QTableWidget,
     QTableWidgetItem,
 )
 
+from ..panel import Panel
 from ..symbol_context import GROUPS, SymbolContext
-from ..theme import ACCENT
+from ..theme import ACCENT, FG_DIM
 
 
 def parse_published(value: Any) -> Optional[datetime]:
@@ -142,6 +148,7 @@ def populate_news_table(table: QTableWidget, data: Any) -> int:
         head_item = QTableWidgetItem(title)
         head_item.setToolTip(f"{title}\n— {publisher}" if publisher else title)
         head_item.setData(Qt.ItemDataRole.UserRole, entry.get("url"))
+        head_item.setData(Qt.ItemDataRole.UserRole + 1, entry.get("summary") or "")
         head_item.setFlags(head_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
         table.setItem(row, 0, time_item)
@@ -156,3 +163,191 @@ def news_url_at(table: QTableWidget, row: int) -> Optional[str]:
         return None
     url = item.data(Qt.ItemDataRole.UserRole)
     return str(url) if url else None
+
+
+def news_summary_at(table: QTableWidget, row: int) -> str:
+    item = table.item(row, 1)
+    if item is None:
+        return ""
+    return str(item.data(Qt.ItemDataRole.UserRole + 1) or "")
+
+
+def filter_news_table(table: QTableWidget, text: str) -> None:
+    """Hide rows whose headline doesn't contain ``text`` (case-insensitive)."""
+    needle = (text or "").strip().casefold()
+    for r in range(table.rowCount()):
+        item = table.item(r, 1)
+        hay = item.text().casefold() if item is not None else ""
+        table.setRowHidden(r, bool(needle) and needle not in hay)
+
+
+_OG_RE = re.compile(
+    r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
+    re.I,
+)
+_OG_RE_REV = re.compile(
+    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:description["\']',
+    re.I,
+)
+_DESC_RE = re.compile(
+    r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', re.I
+)
+_P_RE = re.compile(r"<p[^>]*>(.*?)</p>", re.I | re.S)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def parse_article_snippet(body: str) -> Optional[str]:
+    """Pull a preview from page HTML: OpenGraph/meta description, else the first
+    paragraph. Returns None if nothing usable is found."""
+    for rx in (_OG_RE, _OG_RE_REV, _DESC_RE):
+        m = rx.search(body)
+        if m:
+            return _html.unescape(m.group(1)).strip()[:400] or None
+    m = _P_RE.search(body)
+    if m:
+        text = _html.unescape(_TAG_RE.sub("", m.group(1))).strip()
+        return text[:400] or None
+    return None
+
+
+def fetch_article_snippet(url: str) -> Optional[str]:
+    """Best-effort 1–2 sentence preview for a news URL. Returns None on any
+    network/parse failure. **Runs on a worker thread — never call from the GUI
+    thread.**"""
+    try:
+        resp = requests.get(
+            url, timeout=5, headers={"User-Agent": "Mozilla/5.0 (findash)"}
+        )
+        resp.raise_for_status()
+        body = resp.text[:200_000]
+    except Exception:
+        return None
+    return parse_article_snippet(body)
+
+
+class NewsPanelBase(Panel):
+    """Shared news-panel behaviour: a live headline filter, read/unread dimming,
+    and an on-click article preview fetched off the GUI thread.
+
+    Subclasses build their own controls, then call :meth:`_build_news_ui` to add
+    the filter box + table + preview line, and :meth:`_render_news` whenever new
+    data arrives. Read URLs persist via :meth:`_read_state` / :meth:`_restore_read`.
+    """
+
+    # emitted from the fetch worker thread; delivered on the GUI thread
+    snippet_ready = Signal(str, str)  # (url, snippet)
+
+    def _build_news_ui(self) -> None:
+        self._read_urls: set[str] = set()
+        self._snippet_cache: dict[str, Optional[str]] = {}
+        self._current_url: Optional[str] = None
+
+        self._news_filter = QLineEdit(self)
+        self._news_filter.setPlaceholderText("Filter headlines…")
+        self._news_filter.setClearButtonEnabled(True)
+        self._news_filter.textChanged.connect(self._apply_news_filter)
+        self.content_layout.addWidget(self._news_filter)
+
+        self.table = make_news_table(self)
+        self.table.cellClicked.connect(self._on_cell_clicked)
+        self.table.cellDoubleClicked.connect(self._open_row)
+        self.content_layout.addWidget(self.table, 1)
+
+        self.preview_lbl = QLabel("", self)
+        self.preview_lbl.setWordWrap(True)
+        self.preview_lbl.setStyleSheet(f"color: {FG_DIM}; padding: 3px 2px;")
+        self.preview_lbl.setMaximumHeight(64)
+        self.preview_lbl.setVisible(False)
+        self.content_layout.addWidget(self.preview_lbl)
+
+        self.snippet_ready.connect(self._on_snippet)
+
+    # -- rendering ---------------------------------------------------------
+
+    def _render_news(self, data: Any) -> int:
+        count = populate_news_table(self.table, data)
+        self._apply_read_styling()
+        filter_news_table(self.table, self._news_filter.text())
+        return count
+
+    def _apply_news_filter(self, text: str) -> None:
+        filter_news_table(self.table, text)
+
+    def _apply_read_styling(self) -> None:
+        dim = QColor(FG_DIM)
+        for r in range(self.table.rowCount()):
+            url = news_url_at(self.table, r)
+            if url and url in self._read_urls:
+                for c in (0, 1):
+                    item = self.table.item(r, c)
+                    if item is not None:
+                        item.setForeground(dim)
+
+    def _mark_read(self, url: Optional[str]) -> None:
+        if url:
+            self._read_urls.add(url)
+
+    # -- interaction -------------------------------------------------------
+
+    def _on_cell_clicked(self, row: int, _col: int) -> None:
+        url = news_url_at(self.table, row)
+        if not url:
+            return
+        self._mark_read(url)
+        self._apply_read_styling()
+        title_item = self.table.item(row, 1)
+        title = title_item.text() if title_item is not None else ""
+        self._show_preview(url, news_summary_at(self.table, row), title)
+
+    def _open_row(self, row: int, _col: int) -> None:
+        url = news_url_at(self.table, row)
+        if not url:
+            return
+        self._mark_read(url)
+        self._apply_read_styling()
+        QDesktopServices.openUrl(QUrl(url))
+
+    def _show_preview(self, url: str, summary: str = "", title: str = "") -> None:
+        self._current_url = url
+        # Prefer the feed's own summary — reliable and instant. Skip it only when
+        # it's empty or just echoes the headline; then fall back to fetching the
+        # article's OpenGraph description off-thread.
+        s = (summary or "").strip()
+        if s and s.casefold() != title.strip().casefold():
+            self._snippet_cache[url] = s
+            self._set_preview(s)
+            return
+        if url in self._snippet_cache:
+            self._set_preview(self._snippet_cache[url])
+            return
+        self.preview_lbl.setText("Loading preview…")
+        self.preview_lbl.setVisible(True)
+        self._hub.run_async(lambda u=url: self._fetch_snippet(u))
+
+    def _fetch_snippet(self, url: str) -> None:
+        """Worker-thread body: fetch, then hop back to the GUI thread via the
+        queued signal (guarded so a closed panel can't crash on emit)."""
+        text = fetch_article_snippet(url)
+        try:
+            self.snippet_ready.emit(url, text or "")
+        except RuntimeError:
+            pass  # panel was destroyed mid-fetch
+
+    def _on_snippet(self, url: str, text: str) -> None:
+        self._snippet_cache[url] = text or None
+        if url == self._current_url:
+            self._set_preview(text or None)
+
+    def _set_preview(self, text: Optional[str]) -> None:
+        self.preview_lbl.setText(text if text else "(no preview available)")
+        self.preview_lbl.setVisible(True)
+
+    # -- read-state persistence (subclasses fold into settings/restore) ----
+
+    def _read_state(self) -> list:
+        # cap so the layout file can't grow without bound
+        return list(self._read_urls)[:1000]
+
+    def _restore_read(self, urls: Any) -> None:
+        if isinstance(urls, list):
+            self._read_urls = {str(u) for u in urls if u}

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
-from ..components import MarketTable
+from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
 from ..theme import DOWN, UP
 
@@ -70,7 +70,6 @@ class MoversPanel(Panel):
             kind_row.addWidget(btn)
             self._kind_buttons[kind] = btn
         kind_row.addStretch(1)
-        self.content_layout.addLayout(kind_row)
 
         self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
@@ -79,6 +78,13 @@ class MoversPanel(Panel):
         for col in (COL_NAME, COL_LAST, COL_CHGPCT, COL_VOLUME):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
+        self.table.enable_sorting()
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter movers…")
+        self._filter.setMaximumWidth(200)
+        kind_row.addWidget(self._filter)
+        self.content_layout.addLayout(kind_row)
         self.content_layout.addWidget(self.table, 1)
 
         self._apply_kind(self._kind, force=True)
@@ -99,37 +105,42 @@ class MoversPanel(Panel):
     # -- data callback -----------------------------------------------------------
 
     def _on_movers(self, data: Any) -> None:
-        self.table.setRowCount(0)
         if not isinstance(data, list) or not data:
+            self.table.setRowCount(0)
             self.set_status(f"{self._kind} · no data")
             return
-        for entry in data:
-            if not isinstance(entry, (list, tuple)) or len(entry) < 5:
-                continue
-            symbol, name, price, chg_pct, volume = entry[:5]
-            row = self.table.rowCount()
-            self.table.insertRow(row)
+        with self.table.bulk_update():
+            self.table.setRowCount(0)
+            for entry in data:
+                if not isinstance(entry, (list, tuple)) or len(entry) < 5:
+                    continue
+                symbol, name, price, chg_pct, volume = entry[:5]
+                row = self.table.rowCount()
+                self.table.insertRow(row)
 
-            sym_item = QTableWidgetItem(str(symbol) if symbol is not None else "-")
-            sym_item.setFlags(sym_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, COL_SYMBOL, sym_item)
+                sym_item = QTableWidgetItem(str(symbol) if symbol is not None else "-")
+                sym_item.setFlags(sym_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.table.setItem(row, COL_SYMBOL, sym_item)
 
-            name_item = QTableWidgetItem(str(name) if name is not None else "-")
-            name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, COL_NAME, name_item)
+                name_item = QTableWidgetItem(str(name) if name is not None else "-")
+                name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.table.setItem(row, COL_NAME, name_item)
 
-            last_item = QTableWidgetItem(_fmt_num(price))
-            chg_item = QTableWidgetItem(f"{_fmt_num(chg_pct)}%" if chg_pct is not None else "-")
-            vol_item = QTableWidgetItem(_fmt_volume(volume))
-            for item in (last_item, chg_item, vol_item):
-                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            if chg_pct is not None:
-                color = QColor(UP) if chg_pct >= 0 else QColor(DOWN)
-                chg_item.setForeground(color)
-            self.table.setItem(row, COL_LAST, last_item)
-            self.table.setItem(row, COL_CHGPCT, chg_item)
-            self.table.setItem(row, COL_VOLUME, vol_item)
+                last_item = NumericTableWidgetItem(_fmt_num(price))
+                chg_item = NumericTableWidgetItem(
+                    f"{_fmt_num(chg_pct)}%" if chg_pct is not None else "-"
+                )
+                vol_item = NumericTableWidgetItem(_fmt_volume(volume))
+                for item in (last_item, chg_item, vol_item):
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                if chg_pct is not None:
+                    color = QColor(UP) if chg_pct >= 0 else QColor(DOWN)
+                    chg_item.setForeground(color)
+                self.table.setItem(row, COL_LAST, last_item)
+                self.table.setItem(row, COL_CHGPCT, chg_item)
+                self.table.setItem(row, COL_VOLUME, vol_item)
+        self.table.apply_filter(self._filter.text())
         self.set_status(f"{self._kind} · {self.table.rowCount()}")
 
     # -- selection -> navigation --------------------------------------------------
@@ -147,9 +158,12 @@ class MoversPanel(Panel):
     # -- persistence ---------------------------------------------------------------
 
     def settings(self) -> dict:
-        return {"kind": self._kind}
+        return {"kind": self._kind, "hidden_cols": self.table.hidden_columns()}
 
     def restore(self, settings: dict) -> None:
-        kind = settings.get("kind") if isinstance(settings, dict) else None
+        if not isinstance(settings, dict):
+            return
+        kind = settings.get("kind")
         if kind in VALID_KINDS:
             self._apply_kind(kind, force=True)
+        self.table.set_hidden_columns(settings.get("hidden_cols", []))

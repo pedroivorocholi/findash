@@ -57,6 +57,9 @@ hiddenimports += [
     "findash.components",
     "findash.components.market_table",
     "findash.onboarding_dialog",
+    "findash.alerts",
+    "findash.command_bar",
+    "findash.undo",
 ]
 
 # yfinance / news deps that static analysis under-collects.

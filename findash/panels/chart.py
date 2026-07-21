@@ -6,13 +6,14 @@ persistence (Bloomberg G-chart style)."""
 
 from __future__ import annotations
 
+import bisect
 import itertools
 from datetime import date, datetime, timedelta
 from typing import Any, Callable, Optional
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QDate, QPointF, QRectF, Qt
+from PySide6.QtCore import QDate, QEvent, QPointF, QRectF, Qt
 from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QPainter, QPicture
 from PySide6.QtWidgets import (
     QColorDialog,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..panel import Panel, register_panel
+from ..undo import UndoStack
 from ..theme import (
     ACCENT,
     BG,
@@ -94,6 +96,30 @@ DEFAULT_COLORS = {
     "grid": FG_DIM,
     "bg": BG,
 }
+
+# Drawings (trendlines / channels) share one user-settable color, default blue.
+# Kept out of DEFAULT_COLORS so it isn't remapped by the theme-default machinery.
+DEFAULT_DRAWING_COLOR = "#2196f3"
+
+# Drawing tools: internal id -> (menu label, number of clicks to place it).
+DRAW_TOOLS = [
+    ("trendline", "Trendline", 2),
+    ("hline", "Horizontal line", 1),
+    ("parallel", "Parallel channel", 3),
+    ("flatbottom", "Flat-bottom channel", 3),
+    ("disjoint", "Disjoint channel", 4),
+]
+DRAW_TOOL_POINTS = {tid: n for tid, _label, n in DRAW_TOOLS}
+DRAW_TOOL_HINTS = {
+    "trendline": "click start and end points",
+    "hline": "click a price level",
+    "parallel": "click 2 points for the base line, then a 3rd to set the width",
+    "flatbottom": "click 2 points for the sloped top, then a 3rd for the flat bottom",
+    "disjoint": "click 2 points for the first line, then 2 for the second",
+}
+# Point indices that move freely (no candle snapping) — the channel width/height
+# controls, so the user can size a channel to any height.
+DRAW_TOOL_FREE_POINTS = {"parallel": {2}, "flatbottom": {2}}
 
 
 def _chart_defaults_for(theme_name: str) -> dict:
@@ -201,6 +227,84 @@ def _median_spacing(t: list) -> float:
     diffs = sorted(t[i + 1] - t[i] for i in range(len(t) - 1))
     diffs = [d for d in diffs if d > 0]
     return diffs[len(diffs) // 2] if diffs else 86400.0
+
+
+def _fmt_compact_num(value: Any) -> str:
+    """Human-format a volume: T/B/M/K suffixes, plain otherwise."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    for suffix, div in (("B", 1e9), ("M", 1e6), ("K", 1e3)):
+        if abs(v) >= div:
+            return f"{v / div:.1f}{suffix}"
+    return f"{v:,.0f}"
+
+
+def _line_y_at(xa, ya, xb, yb, x):
+    """y of the line through (xa,ya)-(xb,yb) at x (flat if the line is vertical)."""
+    if xb == xa:
+        return ya
+    return ya + (yb - ya) / (xb - xa) * (x - xa)
+
+
+def _annotation_geometry(
+    atype: str, pts: list, x_lo: float, x_hi: float
+) -> tuple[list, Optional[tuple]]:
+    """Turn a drawing's placed points into ``(lines, fill)``.
+
+    ``lines`` is a list of ``(xs, ys)`` boundary strokes; ``fill`` is ``None`` or
+    ``(xs_a, ys_a, xs_b, ys_b)`` — two curves over the same x samples whose
+    interior is shaded (channel body). Renders whatever the points so far
+    determine, so the same function drives both the finished drawing and the live
+    rubber-band preview (placed points + current cursor). ``x_lo``/``x_hi`` bound
+    horizontal lines to the data range.
+    """
+    lines: list[tuple[list, list]] = []
+    fill: Optional[tuple] = None
+
+    def seg(a, b) -> None:
+        lines.append(([a[0], b[0]], [a[1], b[1]]))
+
+    if atype == "hline":
+        if pts:
+            lines.append(([x_lo, x_hi], [pts[0][1], pts[0][1]]))
+    elif atype == "trendline":
+        if len(pts) >= 2:
+            seg(pts[0], pts[1])
+    elif atype == "parallel":
+        if len(pts) >= 2:
+            seg(pts[0], pts[1])
+        if len(pts) >= 3:
+            (x1, y1), (x2, y2), (x3, y3) = pts[0], pts[1], pts[2]
+            if x2 != x1:
+                m = (y2 - y1) / (x2 - x1)
+                off = y3 - (y1 + m * (x3 - x1))
+                lines.append(([x1, x2], [y1 + off, y2 + off]))
+                fill = ([x1, x2], [y1, y2], [x1, x2], [y1 + off, y2 + off])
+    elif atype == "flatbottom":
+        if len(pts) >= 2:
+            seg(pts[0], pts[1])
+        if len(pts) >= 3:
+            x1, x2 = pts[0][0], pts[1][0]
+            yb = pts[2][1]
+            lines.append(([x1, x2], [yb, yb]))
+            fill = ([x1, x2], [pts[0][1], pts[1][1]], [x1, x2], [yb, yb])
+    elif atype == "disjoint":
+        if len(pts) >= 2:
+            seg(pts[0], pts[1])
+        if len(pts) >= 4:
+            seg(pts[2], pts[3])
+            (x1, y1), (x2, y2) = pts[0], pts[1]
+            (x3, y3), (x4, y4) = pts[2], pts[3]
+            xu0, xu1 = min(x1, x2, x3, x4), max(x1, x2, x3, x4)
+            fill = (
+                [xu0, xu1],
+                [_line_y_at(x1, y1, x2, y2, xu0), _line_y_at(x1, y1, x2, y2, xu1)],
+                [xu0, xu1],
+                [_line_y_at(x3, y3, x4, y4, xu0), _line_y_at(x3, y3, x4, y4, xu1)],
+            )
+    return lines, fill
 
 
 # -- indicator registry -----------------------------------------------------
@@ -478,6 +582,18 @@ class ChartPanel(Panel):
         self._indicators: list[_IndicatorInstance] = []
         self._palette_iter = 0
 
+        # crosshair readout + drawings (#23). Each annotation is
+        # {"type": <tool>, "points": [[x, y], ...]}; all share one drawing color.
+        # Annotations are tied to the symbol they were drawn on so they don't
+        # float over a different symbol's data after the linked symbol changes.
+        self._annotations: list[dict] = []
+        self._annotation_items: list = []
+        self._annotations_symbol = ""
+        self._drawing_color = DEFAULT_DRAWING_COLOR
+        self._draw_tool: Optional[str] = None
+        self._draw_points: list = []
+        self._preview_items: list = []
+
         # -- title row: ticker · price · change ------------------------------
         title_row = QHBoxLayout()
         title_row.setContentsMargins(2, 2, 2, 2)
@@ -577,6 +693,8 @@ class ChartPanel(Panel):
         self.plot_widget.setMenuEnabled(False)
         self.plot_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.plot_widget.customContextMenuRequested.connect(self._show_chart_menu)
+
+        self._setup_crosshair()
 
         # default working set mirrors the old fixed layout: SMA50 + SMA200 + RSI
         self._add_indicator("sma", {"window": 50}, color="#e91e63", rebuild=False)
@@ -1070,6 +1188,25 @@ class ChartPanel(Panel):
         menu.addAction(log_act)
 
         menu.addSeparator()
+        draw_menu = menu.addMenu("Drawing")
+        for tid, label, _n in DRAW_TOOLS:
+            act = QAction(label, draw_menu)
+            act.triggered.connect(lambda _=False, t=tid: self._start_tool(t))
+            draw_menu.addAction(act)
+        draw_menu.addSeparator()
+        color_act = QAction("Drawing color…", draw_menu)
+        color_act.triggered.connect(self._pick_drawing_color)
+        draw_menu.addAction(color_act)
+        undo_act = QAction("Remove last drawing", draw_menu)
+        undo_act.setEnabled(bool(self._annotations))
+        undo_act.triggered.connect(self._remove_last_drawing)
+        draw_menu.addAction(undo_act)
+        clear_act = QAction("Clear drawings", draw_menu)
+        clear_act.setEnabled(bool(self._annotations))
+        clear_act.triggered.connect(self._clear_drawings_action)
+        draw_menu.addAction(clear_act)
+
+        menu.addSeparator()
         reset_act = QAction("Reset zoom", menu)
         reset_act.triggered.connect(
             lambda: self._frame_window(self._hist_t, self._hist_hi, self._hist_lo)
@@ -1149,6 +1286,13 @@ class ChartPanel(Panel):
                 for axis in ("left", "bottom"):
                     inst.pane.getAxis(axis).setTextPen(self._colors["grid"])
                     inst.pane.getAxis(axis).setPen(pg.mkPen(self._colors["grid"]))
+        # crosshair follows the grid/axis color; text keeps FG via setHtml
+        if hasattr(self, "_cross_v"):
+            cross_pen = pg.mkPen(
+                self._colors["grid"], width=1, style=Qt.PenStyle.DashLine
+            )
+            self._cross_v.setPen(cross_pen)
+            self._cross_h.setPen(cross_pen)
         # volume/MACD histograms derive bar colors from up/down
         self._apply_chart_type()
         self._refresh_all_indicators()
@@ -1181,6 +1325,8 @@ class ChartPanel(Panel):
     def _reset_defaults(self) -> None:
         for inst in list(self._indicators):
             self._remove_indicator(inst)
+        self._drawing_color = DEFAULT_DRAWING_COLOR
+        self._clear_drawings()
         self._palette_iter = 0
         self._colors = dict(DEFAULT_COLORS)
         self._chart_type = "candles"
@@ -1198,10 +1344,277 @@ class ChartPanel(Panel):
         if self.current_symbol:
             self._resubscribe(self.current_symbol)
 
+    # -- crosshair + OHLC readout (#23) ----------------------------------------
+
+    def _setup_crosshair(self) -> None:
+        """A vertical+horizontal crosshair that snaps to the nearest bar, plus a
+        pinned OHLC readout. Lines/text are added with ignoreBounds so they never
+        affect auto-range."""
+        pen = pg.mkPen(self._colors["grid"], width=1, style=Qt.PenStyle.DashLine)
+        self._cross_v = pg.InfiniteLine(angle=90, movable=False, pen=pen)
+        self._cross_h = pg.InfiniteLine(angle=0, movable=False, pen=pen)
+        for ln in (self._cross_v, self._cross_h):
+            ln.setZValue(20)
+            ln.setVisible(False)
+            self.plot_widget.addItem(ln, ignoreBounds=True)
+        self._cross_text = pg.TextItem(anchor=(0, 0), color=self._colors["grid"])
+        self._cross_text.setZValue(21)
+        self._cross_text.setVisible(False)
+        self.plot_widget.addItem(self._cross_text, ignoreBounds=True)
+
+        scene = self.plot_widget.scene()
+        scene.sigMouseMoved.connect(self._on_mouse_moved)
+        scene.sigMouseClicked.connect(self._on_scene_clicked)
+        # hide the crosshair when the pointer leaves the plot
+        self.plot_widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 (Qt override)
+        if obj is self.plot_widget and event.type() == QEvent.Type.Leave:
+            self._hide_crosshair()
+        return super().eventFilter(obj, event)
+
+    def _hide_crosshair(self) -> None:
+        for item in (self._cross_v, self._cross_h, self._cross_text):
+            item.setVisible(False)
+
+    def _nearest_index(self, x: float) -> Optional[int]:
+        t = self._hist_t
+        if not t:
+            return None
+        j = bisect.bisect_left(t, x)
+        if j <= 0:
+            return 0
+        if j >= len(t):
+            return len(t) - 1
+        return j if (t[j] - x) < (x - t[j - 1]) else j - 1
+
+    def _on_mouse_moved(self, pos) -> None:
+        if not self._hist_t:
+            self._hide_crosshair()
+            return
+        if not self.plot_widget.sceneBoundingRect().contains(pos):
+            self._hide_crosshair()
+            return
+        vb = self.plot_widget.getViewBox()
+        mp = vb.mapSceneToView(pos)
+        i = self._nearest_index(mp.x())
+        if i is None:
+            self._hide_crosshair()
+            return
+        self._cross_v.setPos(self._hist_t[i])
+        self._cross_h.setPos(mp.y())
+        self._cross_v.setVisible(True)
+        self._cross_h.setVisible(True)
+        self._update_readout(i)
+        # while a drawing tool is active, rubber-band the in-progress shape to
+        # the cursor so it follows the crosshair until the next click
+        if self._draw_tool is not None:
+            self._update_preview(mp)
+
+    def _update_readout(self, i: int) -> None:
+        o, h, l, c = self._hist_o[i], self._hist_hi[i], self._hist_lo[i], self._hist_c[i]
+        v = self._hist_v[i] if i < len(self._hist_v) else None
+        when = datetime.fromtimestamp(self._hist_t[i])
+        fmt = "%Y-%m-%d" if self._interval in ("1d", "1wk", "1mo") else "%Y-%m-%d %H:%M"
+        col = self._colors["up"] if c >= o else self._colors["down"]
+        vol = f"  V {_fmt_compact_num(v)}" if v else ""
+        self._cross_text.setHtml(
+            f'<div style="font-family:monospace;font-size:11px;color:{FG};">'
+            f'{when.strftime(fmt)}<br>'
+            f'O {o:,.2f}&nbsp; H {h:,.2f}&nbsp; L {l:,.2f}&nbsp; '
+            f'<span style="color:{col};">C {c:,.2f}</span>{vol}</div>'
+        )
+        # pin the readout to the top-left corner of the current view
+        (xmin, _xmax), (_ymin, ymax) = self.plot_widget.getViewBox().viewRange()
+        self._cross_text.setPos(xmin, ymax)
+        self._cross_text.setVisible(True)
+
+    # -- drawing tools: trendlines & channels (#23) ----------------------------
+
+    def _data_x_range(self) -> tuple[float, float]:
+        """X span for horizontal drawings — the loaded bars, or the current
+        view when there's no data yet."""
+        if self._hist_t:
+            return self._hist_t[0], self._hist_t[-1]
+        (xlo, xhi), _ = self.plot_widget.getViewBox().viewRange()
+        return xlo, xhi
+
+    def _snap_point(self, mp) -> tuple:
+        """Snap a view-coordinate point to the nearest bar's time and to that
+        bar's nearest O/H/L/C price, so drawings anchor to candles."""
+        i = self._nearest_index(mp.x())
+        if i is None:
+            return (mp.x(), mp.y())
+        ohlc = (self._hist_o[i], self._hist_hi[i], self._hist_lo[i], self._hist_c[i])
+        y = min(ohlc, key=lambda v: abs(v - mp.y()))
+        return (self._hist_t[i], y)
+
+    def _place_point(self, mp, index: int) -> tuple:
+        """The coordinate for the point being placed. Most points snap to a
+        candle; the channel width/height controls move freely so the user can
+        size a channel to any height."""
+        free = index in DRAW_TOOL_FREE_POINTS.get(self._draw_tool, ())
+        return (mp.x(), mp.y()) if free else self._snap_point(mp)
+
+    def _snapshot_drawings(self) -> tuple:
+        return (
+            [{"type": a["type"], "points": [list(p) for p in a["points"]]}
+             for a in self._annotations],
+            self._drawing_color,
+        )
+
+    def _push_drawing_undo(self, label: str) -> None:
+        """Record the current drawings + color so Ctrl+Z can restore them after
+        the caller mutates them (add/remove/clear/recolor)."""
+        anns, color = self._snapshot_drawings()
+
+        def _undo() -> None:
+            self._annotations = [
+                {"type": a["type"], "points": [list(p) for p in a["points"]]}
+                for a in anns
+            ]
+            self._drawing_color = color
+            self._render_annotations()
+            self.set_status(f"undo · {label}")
+
+        UndoStack.instance().push(label, _undo)
+
+    def _start_tool(self, tool: str) -> None:
+        self._draw_tool = tool
+        self._draw_points = []
+        self._clear_preview()
+        hint = DRAW_TOOL_HINTS.get(tool, "")
+        self.set_status(f"drawing — {hint} (right-click to cancel)")
+
+    def _cancel_tool(self) -> None:
+        self._draw_tool = None
+        self._draw_points = []
+        self._clear_preview()
+        self.set_status("drawing cancelled")
+
+    def _on_scene_clicked(self, ev) -> None:
+        if self._draw_tool is None:
+            return
+        if ev.button() != Qt.MouseButton.LeftButton:
+            self._cancel_tool()
+            ev.accept()
+            return
+        mp = self.plot_widget.getViewBox().mapSceneToView(ev.scenePos())
+        self._draw_points.append(list(self._place_point(mp, len(self._draw_points))))
+        ev.accept()
+        needed = DRAW_TOOL_POINTS[self._draw_tool]
+        if len(self._draw_points) >= needed:
+            tool = self._draw_tool
+            self._push_drawing_undo(f"add {tool}")
+            self._annotations.append(
+                {"type": tool, "points": [list(p) for p in self._draw_points[:needed]]}
+            )
+            self._annotations_symbol = self.current_symbol
+            self._draw_tool = None
+            self._draw_points = []
+            self._clear_preview()
+            self._render_annotations()
+            self.set_status(f"{tool} added ({len(self._annotations)} drawing(s))")
+        else:
+            self.set_status(
+                f"drawing — {len(self._draw_points)}/{needed} points placed"
+            )
+
+    def _polyline_item(self, xs: list, ys: list, *, preview: bool) -> pg.PlotDataItem:
+        style = Qt.PenStyle.DashLine if preview else Qt.PenStyle.SolidLine
+        width = 1.2 if preview else 1.5
+        item = pg.PlotDataItem(
+            xs, ys, pen=pg.mkPen(self._drawing_color, width=width, style=style)
+        )
+        item.setZValue(7 if preview else 6)
+        self.plot_widget.addItem(item, ignoreBounds=True)
+        return item
+
+    def _fill_item(self, fill: tuple, *, preview: bool) -> pg.FillBetweenItem:
+        """A shaded channel interior between two boundary curves."""
+        xs_a, ys_a, xs_b, ys_b = fill
+        curve_a = pg.PlotCurveItem(xs_a, ys_a)
+        curve_b = pg.PlotCurveItem(xs_b, ys_b)
+        brush_color = QColor(self._drawing_color)
+        brush_color.setAlpha(28 if preview else 45)
+        fb = pg.FillBetweenItem(curve_a, curve_b, brush=pg.mkBrush(brush_color))
+        fb.setZValue(4)  # above candles, below the price line/indicators
+        self.plot_widget.addItem(fb, ignoreBounds=True)
+        return fb
+
+    def _add_geometry_items(self, atype, pts, *, preview: bool) -> None:
+        x_lo, x_hi = self._data_x_range()
+        lines, fill = _annotation_geometry(atype, pts, x_lo, x_hi)
+        target = self._preview_items if preview else self._annotation_items
+        if fill is not None:
+            target.append(self._fill_item(fill, preview=preview))
+        for xs, ys in lines:
+            target.append(self._polyline_item(xs, ys, preview=preview))
+
+    def _render_annotations(self) -> None:
+        for item in self._annotation_items:
+            self.plot_widget.removeItem(item)
+        self._annotation_items = []
+        for ann in self._annotations:
+            self._add_geometry_items(ann["type"], ann["points"], preview=False)
+
+    def _clear_preview(self) -> None:
+        for item in self._preview_items:
+            self.plot_widget.removeItem(item)
+        self._preview_items = []
+
+    def _update_preview(self, mp) -> None:
+        self._clear_preview()
+        if self._draw_tool is None:
+            return
+        cursor = self._place_point(mp, len(self._draw_points))
+        pts = self._draw_points + [list(cursor)]
+        self._add_geometry_items(self._draw_tool, pts, preview=True)
+
+    def _pick_drawing_color(self) -> None:
+        picked = QColorDialog.getColor(
+            QColor(self._drawing_color), self, "Drawing color"
+        )
+        if not picked.isValid():
+            return
+        self._push_drawing_undo("drawing color")
+        self._drawing_color = picked.name()
+        self._render_annotations()
+        self.set_status("drawing color updated")
+
+    def _remove_last_drawing(self) -> None:
+        if not self._annotations:
+            return
+        self._push_drawing_undo("remove drawing")
+        self._annotations.pop()
+        self._render_annotations()
+        self.set_status(f"removed drawing ({len(self._annotations)} left)")
+
+    def _clear_drawings_action(self) -> None:
+        """User-invoked 'Clear drawings' (undoable). Distinct from the internal
+        clear used on symbol change / reset, which must not create undo steps."""
+        if not self._annotations:
+            return
+        self._push_drawing_undo("clear drawings")
+        self._clear_drawings()
+        self.set_status("cleared drawings")
+
+    def _clear_drawings(self) -> None:
+        self._annotations = []
+        self._clear_preview()
+        self._render_annotations()
+
     # -- linked-symbol lifecycle ------------------------------------------------
 
     def on_symbol(self, symbol: str) -> None:
+        # trendlines are drawn against a specific symbol's bars — drop them when
+        # the linked symbol actually changes (restore() re-seeds the tag so
+        # persisted drawings survive a layout reload of the same symbol).
+        if symbol != self._annotations_symbol:
+            self._clear_drawings()
+            self._annotations_symbol = symbol
         self.set_status(f"{symbol} loading…")
+        self._hide_crosshair()
         self._last_quote = {}
         self._hist_t, self._hist_o, self._hist_c = [], [], []
         self._hist_hi, self._hist_lo, self._hist_v = [], [], []
@@ -1317,6 +1730,7 @@ class ChartPanel(Panel):
         self._refresh_all_indicators()
         self._apply_chart_type()
         self._frame_window(valid_t, valid_h, valid_l)
+        self._render_annotations()  # keep horizontal drawings spanning the bars
 
         rng = self._range.get("preset") or (
             f"{self._range.get('start')}→{self._range.get('end')}"
@@ -1362,6 +1776,12 @@ class ChartPanel(Panel):
                 }
                 for inst in self._indicators
             ],
+            "annotations": [
+                {"type": a["type"], "points": [list(p) for p in a["points"]]}
+                for a in self._annotations
+            ],
+            "annotations_symbol": self._annotations_symbol,
+            "drawing_color": self._drawing_color,
         }
 
     def restore(self, settings: dict) -> None:
@@ -1422,6 +1842,44 @@ class ChartPanel(Panel):
                     on=bool(entry.get("on", True)),
                     rebuild=False,
                 )
+
+        # drawings (validated) + the symbol they belong to, so on_symbol() keeps
+        # them when the same symbol is re-applied post-restore
+        dc = settings.get("drawing_color")
+        if isinstance(dc, str) and QColor(dc).isValid():
+            self._drawing_color = dc
+        anns = settings.get("annotations")
+        if isinstance(anns, list):
+            clean: list[dict] = []
+            for a in anns:
+                if not isinstance(a, dict):
+                    continue
+                # migrate the original single-line format {x1,y1,x2,y2}
+                if "type" not in a and all(k in a for k in ("x1", "y1", "x2", "y2")):
+                    try:
+                        clean.append({
+                            "type": "trendline",
+                            "points": [[float(a["x1"]), float(a["y1"])],
+                                       [float(a["x2"]), float(a["y2"])]],
+                        })
+                    except (TypeError, ValueError):
+                        pass
+                    continue
+                atype = a.get("type")
+                pts = a.get("points")
+                if atype not in DRAW_TOOL_POINTS or not isinstance(pts, list):
+                    continue
+                try:
+                    cpts = [[float(p[0]), float(p[1])] for p in pts]
+                except (TypeError, ValueError, IndexError):
+                    continue
+                if len(cpts) >= DRAW_TOOL_POINTS[atype]:
+                    clean.append({"type": atype, "points": cpts[:DRAW_TOOL_POINTS[atype]]})
+            self._annotations = clean
+            self._render_annotations()
+        asym = settings.get("annotations_symbol")
+        if isinstance(asym, str):
+            self._annotations_symbol = asym
 
         self.plot_widget.showGrid(x=self._grid_on, y=self._grid_on, alpha=0.15)
         self.plot_widget.setLogMode(y=self._log_on)

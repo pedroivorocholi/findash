@@ -21,8 +21,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..components import MarketTable
+from ..components import MarketTable, make_filter_edit
 from ..panel import Panel, register_panel
+from ..undo import UndoStack
 from ..theme import ACCENT, BG_HEADER, DOWN, FG_DIM, UP
 
 DEFAULT_ENERGY = [
@@ -131,6 +132,10 @@ class CommoditiesPanel(Panel):
         for col in (COL_LAST, COL_CHG, COL_CHGPCT, COL_RANGE):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter commodities…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
         edit_row = QHBoxLayout()
@@ -159,6 +164,9 @@ class CommoditiesPanel(Panel):
         self._append_group_header("Metals")
         for label, sym in self._metals:
             self._append_data_row(label, sym)
+
+        if hasattr(self, "_filter"):
+            self.table.apply_filter(self._filter.text())
 
         for _label, sym in self._energy + self._metals:
             self.subscribe(f"quote:{sym}", lambda data, s=sym: self._on_quote(s, data))
@@ -245,6 +253,16 @@ class CommoditiesPanel(Panel):
             energy = dlg.result_energy()
             metals = dlg.result_metals()
             if energy or metals:
+                snap_e = [list(r) for r in self._energy]
+                snap_m = [list(r) for r in self._metals]
+
+                def _undo() -> None:
+                    self._energy = [list(r) for r in snap_e]
+                    self._metals = [list(r) for r in snap_m]
+                    self._rebuild_table()
+                    self.set_status("undo · edit commodities")
+
+                UndoStack.instance().push("edit commodities", _undo)
                 self._energy = energy or self._energy
                 self._metals = metals or self._metals
                 self._rebuild_table()
@@ -252,7 +270,11 @@ class CommoditiesPanel(Panel):
     # -- persistence -------------------------------------------------------------
 
     def settings(self) -> dict:
-        return {"energy": [list(r) for r in self._energy], "metals": [list(r) for r in self._metals]}
+        return {
+            "energy": [list(r) for r in self._energy],
+            "metals": [list(r) for r in self._metals],
+            "hidden_cols": self.table.hidden_columns(),
+        }
 
     def restore(self, settings: dict) -> None:
         if not isinstance(settings, dict):
@@ -272,3 +294,4 @@ class CommoditiesPanel(Panel):
                 changed = True
         if changed:
             self._rebuild_table()
+        self.table.set_hidden_columns(settings.get("hidden_cols", []))

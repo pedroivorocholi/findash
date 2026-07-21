@@ -9,6 +9,7 @@ to the next source, so thin RSS matches never mask the older sources.
 
 from __future__ import annotations
 
+import html as _html
 import os
 import re
 import threading
@@ -72,6 +73,16 @@ def _parse_feed_datetime(value: str) -> Optional[datetime]:
     return dt
 
 
+def _clean_summary(text: Any, limit: int = 320) -> str:
+    """Strip HTML tags/entities from a feed summary and collapse whitespace.
+    Google-News-style descriptions that are just the headline again are dropped
+    by the panel (it compares against the title), so returning them is harmless."""
+    if not text:
+        return ""
+    plain = _html.unescape(re.sub(r"<[^>]+>", " ", str(text)))
+    return " ".join(plain.split())[:limit]
+
+
 def _parse_feed_xml(xml_text: str, publisher: str, category: str) -> list[dict]:
     """Extract items from RSS 2.0 or Atom XML; malformed feeds yield []."""
     try:
@@ -90,6 +101,7 @@ def _parse_feed_xml(xml_text: str, publisher: str, category: str) -> list[dict]:
                 "publisher": publisher,
                 "url": (item.findtext("link") or "").strip(),
                 "published": (item.findtext("pubDate") or "").strip(),
+                "summary": _clean_summary(item.findtext("description")),
                 "category": category,
             }
         )
@@ -106,12 +118,18 @@ def _parse_feed_xml(xml_text: str, publisher: str, category: str) -> list[dict]:
         published = (
             entry.findtext(f"{atom}published") or entry.findtext(f"{atom}updated") or ""
         ).strip()
+        summary = (
+            entry.findtext(f"{atom}summary")
+            or entry.findtext(f"{atom}content")
+            or ""
+        )
         items.append(
             {
                 "title": title,
                 "publisher": publisher,
                 "url": url,
                 "published": published,
+                "summary": _clean_summary(summary),
                 "category": category,
             }
         )
@@ -265,6 +283,7 @@ class NewsProvider(Provider):
                         "publisher": source.get("name") or "",
                         "url": a.get("url") or "",
                         "published": a.get("publishedAt") or "",
+                        "summary": _clean_summary(a.get("description")),
                     }
                 )
             return items
@@ -290,6 +309,7 @@ class NewsProvider(Provider):
                         "publisher": publisher or "",
                         "url": r.get("url") or "",
                         "published": r.get("published date") or "",
+                        "summary": _clean_summary(r.get("description")),
                     }
                 )
             return items
@@ -317,6 +337,7 @@ class NewsProvider(Provider):
                         "publisher": publisher or "",
                         "url": r.get("url") or "",
                         "published": r.get("published date") or "",
+                        "summary": _clean_summary(r.get("description")),
                     }
                 )
             return items
@@ -352,11 +373,16 @@ class NewsProvider(Provider):
             if isinstance(canonical, dict):
                 url = canonical.get("url", "") or ""
             published = content.get("pubDate") or content.get("displayTime") or ""
-            return {"title": title, "publisher": publisher, "url": url, "published": published}
+            summary = content.get("summary") or content.get("description") or ""
+            return {
+                "title": title, "publisher": publisher, "url": url,
+                "published": published, "summary": _clean_summary(summary),
+            }
 
         title = item.get("title") or ""
         publisher = item.get("publisher") or ""
         url = item.get("link") or ""
+        summary = item.get("summary") or ""
         published = ""
         ts = item.get("providerPublishTime")
         if ts:
@@ -364,4 +390,7 @@ class NewsProvider(Provider):
                 published = datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
             except Exception:
                 published = ""
-        return {"title": title, "publisher": publisher, "url": url, "published": published}
+        return {
+            "title": title, "publisher": publisher, "url": url,
+            "published": published, "summary": _clean_summary(summary),
+        }

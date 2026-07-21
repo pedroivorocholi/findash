@@ -10,23 +10,29 @@ from pathlib import Path
 import PySide6QtAds as QtAds
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPropertyAnimation
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QActionGroup, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
+    QSystemTrayIcon,
     QWidget,
     QHBoxLayout,
 )
 
+from .alerts import AlertEngine
+from .command_bar import CommandBar
 from .datahub import DataHub
 from .layout_store import LayoutStore
 from .panel import Panel, PanelRegistry
 from .paths import BUNDLE_DIR
 from .symbol_context import DEFAULT_GROUP, GROUPS, SymbolContext
+from .undo import UndoStack
 
 LAYOUTS_DIR = BUNDLE_DIR / "layouts"
 
@@ -63,10 +69,10 @@ class MainWindow(QMainWindow):
         bl.setSpacing(10)
         lbl = QLabel("SYMBOL", bar)
         lbl.setObjectName("commandLabel")
-        self._cmd = QLineEdit(bar)
+        self._cmd = CommandBar(bar, completions=self._command_completions)
         self._cmd.setObjectName("commandInput")
         self._cmd.setPlaceholderText(
-            "Type a ticker (e.g. AAPL, MSFT, ES=F) and press Enter — all linked panels follow"
+            "Ticker (AAPL) or a /command — /add /layout /save /refresh · ↑↓ history · Tab completes"
         )
         self._cmd.returnPressed.connect(self._on_command)
         bl.addWidget(lbl)
@@ -104,6 +110,8 @@ class MainWindow(QMainWindow):
         self._install_refresh_all()
         self._install_search_shortcut()
         self._install_more_shortcuts()
+        self._install_undo()
+        self._install_tray()
         self.statusBar().showMessage(
             "Click any ticker — every linked panel follows. Data: Yahoo Finance/Google News (free, delayed)."
         )
@@ -169,6 +177,105 @@ class MainWindow(QMainWindow):
                 lambda _=False, idx=i: self._set_focused_link_group(idx)
             )
             self.addAction(act)
+
+    def _install_undo(self) -> None:
+        """Ctrl+Z: undo the most recent dashboard edit (chart drawings,
+        watchlist changes, monitor-list edits, …) from the global UndoStack.
+        When a text field is focused, Ctrl+Z stays its normal text undo."""
+        undo_act = QAction(self)
+        undo_act.setShortcut(QKeySequence.StandardKey.Undo)
+        undo_act.triggered.connect(self._undo_last)
+        self.addAction(undo_act)
+
+    def _undo_last(self) -> None:
+        # let a focused text box keep its own Ctrl+Z (command bar, filter boxes)
+        fw = QApplication.focusWidget()
+        if isinstance(fw, QLineEdit) and fw.isUndoAvailable():
+            fw.undo()
+            return
+        label = UndoStack.instance().undo()
+        if label:
+            self.statusBar().showMessage(f"Undid: {label}", 3000)
+        else:
+            self.statusBar().showMessage("Nothing to undo.", 2500)
+
+    # -- system tray + price alerts ----------------------------------------
+
+    def _install_tray(self) -> None:
+        """Tray icon with Show/Hide/Quit, an opt-in 'Close to tray' toggle, and
+        balloon notifications when a price alert fires. No-op where the platform
+        has no system tray."""
+        self._tray: QSystemTrayIcon | None = None
+        self._force_quit = False
+        # keep the alert engine alive + route its notifications to the tray even
+        # if the Alerts panel is never opened
+        self._alert_engine = AlertEngine.instance()
+        self._alert_engine.alert_triggered.connect(self._on_alert_triggered)
+
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        icon = QApplication.instance().windowIcon()
+        if icon.isNull():
+            ico = BUNDLE_DIR / "findash.ico"
+            if ico.is_file():
+                icon = QIcon(str(ico))
+        if icon.isNull():
+            icon = self.style().standardIcon(
+                self.style().StandardPixmap.SP_ComputerIcon
+            )
+        self._tray = QSystemTrayIcon(icon, self)
+        self._tray.setToolTip("findash")
+
+        menu = QMenu()
+        menu.addAction("Show").triggered.connect(self._show_from_tray)
+        menu.addAction("Hide").triggered.connect(self.hide)
+        menu.addSeparator()
+        self._close_to_tray_act = menu.addAction("Close to tray")
+        self._close_to_tray_act.setCheckable(True)
+        self._close_to_tray_act.setChecked(
+            QSettings().value("tray/close_to_tray", False, type=bool)
+        )
+        self._close_to_tray_act.toggled.connect(
+            lambda v: QSettings().setValue("tray/close_to_tray", bool(v))
+        )
+        menu.addSeparator()
+        menu.addAction("Quit findash").triggered.connect(self._quit_app)
+        self._tray_menu = menu  # keep a reference
+        self._tray.setContextMenu(menu)
+        self._tray.activated.connect(self._on_tray_activated)
+        self._tray.show()
+
+    def _close_to_tray_enabled(self) -> bool:
+        return (
+            self._tray is not None
+            and getattr(self, "_close_to_tray_act", None) is not None
+            and self._close_to_tray_act.isChecked()
+        )
+
+    def _on_tray_activated(self, reason) -> None:
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._show_from_tray()
+
+    def _show_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _quit_app(self) -> None:
+        self._force_quit = True
+        self.close()
+
+    def _on_alert_triggered(self, message: str) -> None:
+        if self._tray is not None:
+            self._tray.showMessage(
+                "findash — price alert", message,
+                QSystemTrayIcon.MessageIcon.Information, 8000,
+            )
+        self.statusBar().showMessage(f"⚠ Alert: {message}", 8000)
 
     def _close_focused_dock(self) -> None:
         dock = self.dock_manager.focusedDockWidget()
@@ -380,7 +487,8 @@ class MainWindow(QMainWindow):
         m_file = self._menubar.addMenu("&File")
         a_quit = QAction("&Quit", self)
         a_quit.setShortcut(QKeySequence.StandardKey.Quit)
-        a_quit.triggered.connect(self.close)
+        # real quit even when 'Close to tray' is on (that only intercepts the X)
+        a_quit.triggered.connect(self._quit_app)
         m_file.addAction(a_quit)
         # Layout export/import/sharing all live in the Layout menu.
 
@@ -672,10 +780,60 @@ class MainWindow(QMainWindow):
         self.close()
 
     def _on_command(self) -> None:
-        text = self._cmd.text().strip().upper()
-        if text:
-            SymbolContext.instance().set_symbol(DEFAULT_GROUP, text, source=self)
-            self._cmd.clear()
+        raw = self._cmd.text().strip()
+        if not raw:
+            return
+        self._cmd.push_history(raw)
+        if raw.startswith("/"):
+            self._run_slash_command(raw)
+        else:
+            SymbolContext.instance().set_symbol(
+                DEFAULT_GROUP, raw.upper(), source=self
+            )
+        self._cmd.clear()
+        self._cmd.refresh_completions()
+
+    def _command_completions(self) -> list[str]:
+        """Candidates for the command bar: /add <panel>, /layout <name>, the
+        bare /save & /refresh verbs, and every watchlist symbol currently on
+        screen."""
+        items = [f"/add {m.id}" for m in PanelRegistry.all()]
+        items += [f"/layout {name}" for name in self.layout_store.names()]
+        items += ["/save", "/refresh"]
+        symbols: set[str] = set()
+        for dock in self._docks.values():
+            widget = dock.widget()
+            if getattr(widget, "panel_id", "") == "watchlist":
+                symbols.update(getattr(widget, "_symbols", []) or [])
+        items += sorted(symbols)
+        return items
+
+    def _run_slash_command(self, raw: str) -> None:
+        parts = raw[1:].split(maxsplit=1)
+        cmd = parts[0].lower() if parts else ""
+        arg = parts[1].strip() if len(parts) > 1 else ""
+        if cmd == "add":
+            if PanelRegistry.get(arg):
+                self.add_panel(arg)
+                self.statusBar().showMessage(f"Added panel: {arg}", 3000)
+            else:
+                self.statusBar().showMessage(f"Unknown panel: {arg or '(none)'}", 3000)
+        elif cmd == "layout":
+            if arg in self.layout_store.names():
+                self._load_named_layout(arg)
+            else:
+                self.statusBar().showMessage(f"Unknown layout: {arg or '(none)'}", 3000)
+        elif cmd == "save":
+            if arg:
+                self.layout_store.put(arg, self.serialize_layout())
+                self._rebuild_layout_menu()
+                self.statusBar().showMessage(f"Layout saved: {arg}", 4000)
+            else:
+                self._save_named_layout()
+        elif cmd == "refresh":
+            self._refresh_all()
+        else:
+            self.statusBar().showMessage(f"Unknown command: /{cmd}", 3000)
 
     # -- panel management --------------------------------------------------------
 
@@ -815,6 +973,7 @@ class MainWindow(QMainWindow):
         self._maximized_instance = None
         self._pre_maximize_state = None
         self._esc_shortcut.setEnabled(False)
+        UndoStack.instance().clear()  # undo history doesn't cross a layout swap
         self._loading_layout = True  # mass-close below isn't a user close
         try:
             for dock in list(self._docks.values()):
@@ -921,7 +1080,18 @@ class MainWindow(QMainWindow):
             self.apply_layout(last)
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
-        """Auto-save the current arrangement so it's restored next launch."""
+        """Hide to the tray if the user opted in (unless Quit was chosen);
+        otherwise auto-save the arrangement and really close."""
+        if self._close_to_tray_enabled() and not self._force_quit:
+            event.ignore()
+            self.hide()
+            if self._tray is not None:
+                self._tray.showMessage(
+                    "findash",
+                    "Still running in the tray — right-click the icon to quit.",
+                    QSystemTrayIcon.MessageIcon.Information, 4000,
+                )
+            return
         try:
             self.layout_store.set_last(self.serialize_layout())
         except Exception:
@@ -930,4 +1100,6 @@ class MainWindow(QMainWindow):
             DataHub.instance()._flush_cache()  # persist latest values for next launch
         except Exception:
             pass
+        if self._tray is not None:
+            self._tray.hide()
         super().closeEvent(event)

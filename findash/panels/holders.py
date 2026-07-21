@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
-from ..components import MarketTable
+from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
 from ..theme import ACCENT
 
@@ -62,6 +62,11 @@ class HoldersPanel(Panel):
         self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.enable_sorting()
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter holders…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
     def on_symbol(self, symbol: str) -> None:
@@ -80,28 +85,41 @@ class HoldersPanel(Panel):
 
         top = data.get("top")
         top = top if isinstance(top, list) else []
-        self.table.setRowCount(0)
-        for entry in top:
-            if not isinstance(entry, (list, tuple)) or len(entry) < 4:
-                continue
-            holder, shares, pct_held, value = entry[0], entry[1], entry[2], entry[3]
-            r = self.table.rowCount()
-            self.table.insertRow(r)
+        with self.table.bulk_update():
+            self.table.setRowCount(0)
+            for entry in top:
+                if not isinstance(entry, (list, tuple)) or len(entry) < 4:
+                    continue
+                holder, shares, pct_held, value = entry[0], entry[1], entry[2], entry[3]
+                r = self.table.rowCount()
+                self.table.insertRow(r)
 
-            holder_item = QTableWidgetItem(str(holder) if holder is not None else "-")
-            holder_item.setFlags(holder_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(r, 0, holder_item)
+                holder_item = QTableWidgetItem(str(holder) if holder is not None else "-")
+                holder_item.setFlags(holder_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.table.setItem(r, 0, holder_item)
 
-            self._set_ro_item(r, 1, _fmt_compact(shares), align_right=True)
-            self._set_ro_item(r, 2, _fmt_pct(pct_held), align_right=True)
-            self._set_ro_item(r, 3, _fmt_compact(value), align_right=True)
+                self._set_ro_item(r, 1, _fmt_compact(shares), align_right=True, numeric=True)
+                self._set_ro_item(r, 2, _fmt_pct(pct_held), align_right=True, numeric=True)
+                self._set_ro_item(r, 3, _fmt_compact(value), align_right=True, numeric=True)
+        self.table.apply_filter(self._filter.text())
 
         sym = self.current_symbol or "—"
         self.set_status(f"{sym} · {len(top)} holders")
 
-    def _set_ro_item(self, row: int, col: int, text: str, align_right: bool = False) -> None:
-        item = QTableWidgetItem(text)
+    def _set_ro_item(
+        self, row: int, col: int, text: str, align_right: bool = False, numeric: bool = False
+    ) -> None:
+        item = NumericTableWidgetItem(text) if numeric else QTableWidgetItem(text)
         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         if align_right:
             item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.table.setItem(row, col, item)
+
+    # -- persistence ------------------------------------------------------------
+
+    def settings(self) -> dict:
+        return {"hidden_cols": self.table.hidden_columns()}
+
+    def restore(self, settings: dict) -> None:
+        if isinstance(settings, dict):
+            self.table.set_hidden_columns(settings.get("hidden_cols", []))

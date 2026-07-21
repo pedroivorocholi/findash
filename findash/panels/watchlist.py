@@ -14,16 +14,16 @@ from typing import Any, Optional
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
     QLineEdit,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
 )
 
+from ..components import MarketTable, NumericTableWidgetItem, make_filter_edit
 from ..panel import Panel, register_panel
+from ..undo import UndoStack
 from ..theme import ACCENT, DOWN, UP
 
 DEFAULT_SYMBOLS = [
@@ -61,22 +61,26 @@ def _fmt_volume(value: Any) -> str:
 class WatchlistPanel(Panel):
     def build(self) -> None:
         self._symbols: list[str] = list(DEFAULT_SYMBOLS)
-        self._row_of: dict[str, int] = {}
+        # symbol -> its column-0 item (find current row via table.row(item)) and
+        # symbol -> the live-updated value cells. Keyed by item reference, not
+        # row index, so quote updates and highlight survive user re-sorting.
+        self._sym_item: dict[str, QTableWidgetItem] = {}
+        self._cells: dict[str, dict] = {}
         self._suppress_select = False
 
-        self.table = QTableWidget(0, len(HEADERS), self)
+        self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setAlternatingRowColors(True)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(COL_SYMBOL, QHeaderView.ResizeMode.ResizeToContents)
         for col in (COL_LAST, COL_CHG, COL_CHGPCT, COL_VOLUME):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
         self.table.installEventFilter(self)
+        self.table.enable_sorting()
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter symbols…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
         add_row = QHBoxLayout()
@@ -110,10 +114,13 @@ class WatchlistPanel(Panel):
         ``self._symbols`` — simplest correct way to keep subscriptions in
         sync with an editable symbol list."""
         self.unsubscribe_all()
-        self.table.setRowCount(0)
-        self._row_of.clear()
-        for sym in self._symbols:
-            self._append_row(sym)
+        self._sym_item.clear()
+        self._cells.clear()
+        with self.table.bulk_update():
+            self.table.setRowCount(0)
+            for sym in self._symbols:
+                self._append_row(sym)
+        self.table.apply_filter(self._filter.text())
         for sym in self._symbols:
             self.subscribe(f"quote:{sym}", lambda data, s=sym: self._on_quote(s, data))
 
@@ -124,46 +131,64 @@ class WatchlistPanel(Panel):
         sym_item.setFlags(sym_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         sym_item.setForeground(QColor(ACCENT))
         self.table.setItem(row, COL_SYMBOL, sym_item)
-        for col in (COL_LAST, COL_CHG, COL_CHGPCT, COL_VOLUME):
-            item = QTableWidgetItem("-")
+        cells: dict = {}
+        for key, col in (
+            ("last", COL_LAST),
+            ("chg", COL_CHG),
+            ("pct", COL_CHGPCT),
+            ("vol", COL_VOLUME),
+        ):
+            item = NumericTableWidgetItem("-")
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(row, col, item)
-        self._row_of[symbol] = row
+            cells[key] = item
+        self._sym_item[symbol] = sym_item
+        self._cells[symbol] = cells
 
     def _on_quote(self, symbol: str, data: Any) -> None:
-        row = self._row_of.get(symbol)
-        if row is None or not isinstance(data, dict):
+        cells = self._cells.get(symbol)
+        if cells is None or not isinstance(data, dict):
             return
         price = data.get("price")
         change = data.get("change")
         change_pct = data.get("change_pct")
         volume = data.get("volume")
 
-        last_item = self.table.item(row, COL_LAST)
-        chg_item = self.table.item(row, COL_CHG)
-        pct_item = self.table.item(row, COL_CHGPCT)
-        vol_item = self.table.item(row, COL_VOLUME)
-        if not (last_item and chg_item and pct_item and vol_item):
-            return
-
-        last_item.setText(_fmt_num(price))
-        chg_item.setText(_fmt_num(change))
-        pct_item.setText(f"{_fmt_num(change_pct)}%" if change_pct is not None else "-")
-        vol_item.setText(_fmt_volume(volume))
-
-        if change is not None:
-            color = QColor(UP) if change >= 0 else QColor(DOWN)
-            chg_item.setForeground(color)
-            pct_item.setForeground(color)
+        # update via cached item references — correct even after the user has
+        # sorted the table (visual row indices no longer track symbols). The
+        # bulk_update coalesces the four edits into a single re-sort per tick.
+        with self.table.bulk_update():
+            cells["last"].setText(_fmt_num(price))
+            cells["chg"].setText(_fmt_num(change))
+            cells["pct"].setText(f"{_fmt_num(change_pct)}%" if change_pct is not None else "-")
+            cells["vol"].setText(_fmt_volume(volume))
+            if change is not None:
+                color = QColor(UP) if change >= 0 else QColor(DOWN)
+                cells["chg"].setForeground(color)
+                cells["pct"].setForeground(color)
+        # a re-sort can drop row-hidden flags, so re-assert an active filter
+        if self._filter.text().strip():
+            self.table.apply_filter(self._filter.text())
 
     # -- add / remove symbols -------------------------------------------------
+
+    def _push_symbols_undo(self, label: str) -> None:
+        snap = list(self._symbols)
+
+        def _undo() -> None:
+            self._symbols = list(snap)
+            self._rebuild_table()
+            self.set_status(f"undo · {label}")
+
+        UndoStack.instance().push(label, _undo)
 
     def _add_symbol(self) -> None:
         text = self.symbol_edit.text().strip().upper()
         self.symbol_edit.clear()
         if not text or text in self._symbols:
             return
+        self._push_symbols_undo("add symbol")
         self._symbols.append(text)
         self._rebuild_table()
 
@@ -171,6 +196,7 @@ class WatchlistPanel(Panel):
         rows = sorted({idx.row() for idx in self.table.selectedIndexes()}, reverse=True)
         if not rows:
             return
+        self._push_symbols_undo("remove symbol")
         for row in rows:
             item = self.table.item(row, COL_SYMBOL)
             if item is None:
@@ -197,8 +223,11 @@ class WatchlistPanel(Panel):
     # -- linked-symbol highlight (no re-publish, no loop) ----------------------
 
     def on_symbol(self, symbol: str) -> None:
-        row = self._row_of.get(symbol)
-        if row is None:
+        item = self._sym_item.get(symbol)
+        if item is None:
+            return
+        row = self.table.row(item)
+        if row < 0:
             return
         self._suppress_select = True
         try:
@@ -209,12 +238,18 @@ class WatchlistPanel(Panel):
     # -- persistence -------------------------------------------------------------
 
     def settings(self) -> dict:
-        return {"symbols": list(self._symbols)}
+        return {
+            "symbols": list(self._symbols),
+            "hidden_cols": self.table.hidden_columns(),
+        }
 
     def restore(self, settings: dict) -> None:
-        symbols = settings.get("symbols") if isinstance(settings, dict) else None
+        if not isinstance(settings, dict):
+            return
+        symbols = settings.get("symbols")
         if isinstance(symbols, list) and symbols:
             cleaned = [str(s).strip().upper() for s in symbols if str(s).strip()]
             if cleaned:
                 self._symbols = cleaned
                 self._rebuild_table()
+        self.table.set_hidden_columns(settings.get("hidden_cols", []))

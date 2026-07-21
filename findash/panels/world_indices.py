@@ -11,7 +11,6 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -19,12 +18,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
 )
 
+from ..components import MarketTable, make_filter_edit
 from ..panel import Panel, register_panel
+from ..undo import UndoStack
 from ..theme import ACCENT, BG_HEADER, DOWN, FG_DIM, UP
 
 DEFAULT_AMERICAS = [
@@ -138,18 +138,17 @@ class WorldIndicesPanel(Panel):
         self._row_kind: dict[int, tuple[str, str | None]] = {}
         self._row_of_symbol: dict[str, int] = {}
 
-        self.table = QTableWidget(0, len(HEADERS), self)
+        self.table = MarketTable(0, len(HEADERS), self)
         self.table.setHorizontalHeaderLabels(HEADERS)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setAlternatingRowColors(True)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(COL_NAME, QHeaderView.ResizeMode.ResizeToContents)
         for col in (COL_LAST, COL_CHG, COL_CHGPCT):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
+        self.table.enable_column_menu()
+
+        self._filter = make_filter_edit(self.table, "Filter indices…")
+        self.content_layout.addWidget(self._filter)
         self.content_layout.addWidget(self.table, 1)
 
         edit_row = QHBoxLayout()
@@ -182,6 +181,9 @@ class WorldIndicesPanel(Panel):
         self._append_group_header("Asia/Pacific")
         for label, sym in self._asia:
             self._append_data_row(label, sym)
+
+        if hasattr(self, "_filter"):
+            self.table.apply_filter(self._filter.text())
 
         for _label, sym in self._americas + self._europe + self._asia:
             self.subscribe(f"quote:{sym}", lambda data, s=sym: self._on_quote(s, data))
@@ -265,6 +267,18 @@ class WorldIndicesPanel(Panel):
             europe = dlg.result_europe()
             asia = dlg.result_asia()
             if americas or europe or asia:
+                snap_am = [list(r) for r in self._americas]
+                snap_eu = [list(r) for r in self._europe]
+                snap_as = [list(r) for r in self._asia]
+
+                def _undo() -> None:
+                    self._americas = [list(r) for r in snap_am]
+                    self._europe = [list(r) for r in snap_eu]
+                    self._asia = [list(r) for r in snap_as]
+                    self._rebuild_table()
+                    self.set_status("undo · edit indices")
+
+                UndoStack.instance().push("edit indices", _undo)
                 self._americas = americas or self._americas
                 self._europe = europe or self._europe
                 self._asia = asia or self._asia
@@ -277,6 +291,7 @@ class WorldIndicesPanel(Panel):
             "americas": [list(r) for r in self._americas],
             "europe": [list(r) for r in self._europe],
             "asia": [list(r) for r in self._asia],
+            "hidden_cols": self.table.hidden_columns(),
         }
 
     def restore(self, settings: dict) -> None:
@@ -303,3 +318,4 @@ class WorldIndicesPanel(Panel):
                 changed = True
         if changed:
             self._rebuild_table()
+        self.table.set_hidden_columns(settings.get("hidden_cols", []))
