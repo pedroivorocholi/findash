@@ -1,4 +1,4 @@
-# findash
+# aurantium
 
 A personal, Bloomberg-style market terminal for your desktop — free data,
 linked panels, and a plugin model that lets anyone fork it and build their
@@ -19,18 +19,18 @@ own panels without touching core code.
 ```
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m findash
+.venv\Scripts\python -m aurantium
 ```
 
 Optional: `copy .env.example .env` and add free API keys (FRED, EIA, NewsAPI).
 
-Or double-click: `findash.bat` (or a desktop shortcut pointing at
-`.venv\Scripts\pythonw.exe -m findash` with `findash.ico`) launches the app
+Or double-click: `aurantium.bat` (or a desktop shortcut pointing at
+`.venv\Scripts\pythonw.exe -m aurantium` with `aurantium.ico`) launches the app
 without a console window.
 
 ## Ship it as a standalone app
 
-Build a single `findash.exe` (no Python needed) — or a full `Setup.exe`
+Build a single `aurantium.exe` (no Python needed) — or a full `Setup.exe`
 installer — to hand to anyone on Windows. See **[BUILD.md](BUILD.md)**.
 
 ## Arrange it

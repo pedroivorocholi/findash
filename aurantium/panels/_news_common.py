@@ -216,7 +216,7 @@ def fetch_article_snippet(url: str) -> Optional[str]:
     thread.**"""
     try:
         resp = requests.get(
-            url, timeout=5, headers={"User-Agent": "Mozilla/5.0 (findash)"}
+            url, timeout=5, headers={"User-Agent": "Mozilla/5.0 (aurantium)"}
         )
         resp.raise_for_status()
         body = resp.text[:200_000]

@@ -37,17 +37,17 @@ from .undo import UndoStack
 LAYOUTS_DIR = BUNDLE_DIR / "layouts"
 
 # Shareable single-layout file (JSON inside). Import also accepts plain .json.
-LAYOUT_EXT = ".findashlayout"
+LAYOUT_EXT = ".aurantiumlayout"
 
 # Bump when the serialized layout schema changes incompatibly. A layout tagged
-# with a higher version was written by a newer findash and is not loaded.
+# with a higher version was written by a newer aurantium and is not loaded.
 CURRENT_LAYOUT_VERSION = 1
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("findash — personal terminal")
+        self.setWindowTitle("aurantium — personal terminal")
         self.resize(1500, 900)
         self._instance_seq: dict[str, int] = {}
         self._docks: dict[str, QtAds.CDockWidget] = {}  # instance_id -> dock
@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
 
         icon = QApplication.instance().windowIcon()
         if icon.isNull():
-            ico = BUNDLE_DIR / "findash.ico"
+            ico = BUNDLE_DIR / "aurantium.ico"
             if ico.is_file():
                 icon = QIcon(str(ico))
         if icon.isNull():
@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
                 self.style().StandardPixmap.SP_ComputerIcon
             )
         self._tray = QSystemTrayIcon(icon, self)
-        self._tray.setToolTip("findash")
+        self._tray.setToolTip("aurantium")
 
         menu = QMenu()
         menu.addAction("Show").triggered.connect(self._show_from_tray)
@@ -244,7 +244,7 @@ class MainWindow(QMainWindow):
         # shared setter keeps this in sync with the Settings-menu toggle
         self._close_to_tray_act.toggled.connect(self._set_close_to_tray)
         menu.addSeparator()
-        menu.addAction("Quit findash").triggered.connect(self._quit_app)
+        menu.addAction("Quit aurantium").triggered.connect(self._quit_app)
         self._tray_menu = menu  # keep a reference
         self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_tray_activated)
@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
 
     def enter_fullscreen(self) -> None:
         """Show the window borderless, filling the screen. Called at launch so
-        findash opens in full screen; keeps the Settings ▸ Full Screen check in
+        aurantium opens in full screen; keeps the Settings ▸ Full Screen check in
         sync without re-triggering the toggle."""
         self._want_fullscreen = True
         act = getattr(self, "_fullscreen_act", None)
@@ -309,7 +309,7 @@ class MainWindow(QMainWindow):
     def _on_alert_triggered(self, message: str) -> None:
         if self._tray is not None:
             self._tray.showMessage(
-                "findash — price alert", message,
+                "aurantium — price alert", message,
                 QSystemTrayIcon.MessageIcon.Information, 8000,
             )
         self.statusBar().showMessage(f"⚠ Alert: {message}", 8000)
@@ -407,7 +407,7 @@ class MainWindow(QMainWindow):
 
     def _register_dock_icons(self) -> None:
         """Replace QtAds' default title-bar icons (tab close, area close, area
-        menu, auto-hide pin) with findash's crisp custom set so all panel chrome
+        menu, auto-hide pin) with aurantium's crisp custom set so all panel chrome
         shares one icon language."""
         try:
             ip = QtAds.CDockManager.iconProvider()
@@ -606,7 +606,7 @@ class MainWindow(QMainWindow):
         a_tray.setChecked(QSettings().value("tray/close_to_tray", False, type=bool))
         a_tray.setEnabled(QSystemTrayIcon.isSystemTrayAvailable())
         a_tray.setToolTip(
-            "Keep findash running in the system tray when the window is closed"
+            "Keep aurantium running in the system tray when the window is closed"
         )
         a_tray.toggled.connect(self._set_close_to_tray)
         self._settings_tray_act = a_tray
@@ -642,7 +642,7 @@ class MainWindow(QMainWindow):
         a_update = QAction("Check for Updates…", self)
         a_update.triggered.connect(self._check_for_updates)
         m.addAction(a_update)
-        a_about = QAction("About findash", self)
+        a_about = QAction("About aurantium", self)
         a_about.triggered.connect(self._show_about)
         m.addAction(a_about)
 
@@ -665,7 +665,7 @@ class MainWindow(QMainWindow):
         resp = QMessageBox.question(
             self,
             "Color-blind mode",
-            f"{'Enable' if on else 'Disable'} color-blind mode?\n\nfindash needs "
+            f"{'Enable' if on else 'Disable'} color-blind mode?\n\naurantium needs "
             "to restart to apply it — your workspace will be restored "
             "automatically.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -718,7 +718,7 @@ class MainWindow(QMainWindow):
         box.setWindowTitle("Connect free data sources")
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setText(
-            "<b>findash works out of the box</b> — quotes, charts, and news "
+            "<b>aurantium works out of the box</b> — quotes, charts, and news "
             "run on free keyless sources.<br><br>"
             "Connecting <b>free API keys</b> unlocks better sources:"
             "<ul>"
@@ -764,8 +764,8 @@ class MainWindow(QMainWindow):
 
         QMessageBox.about(
             self,
-            "About findash",
-            f"<b>findash</b> — personal market terminal<br>"
+            "About aurantium",
+            f"<b>aurantium</b> — personal market terminal<br>"
             f"Version {__version__}<br><br>"
             "Data: Yahoo Finance / Google News (free, delayed).",
         )
@@ -883,7 +883,7 @@ class MainWindow(QMainWindow):
         resp = QMessageBox.question(
             self,
             "Switch theme",
-            f"Switch to the {name} theme?\n\nfindash needs to restart to apply "
+            f"Switch to the {name} theme?\n\naurantium needs to restart to apply "
             "it — your workspace will be restored automatically.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -914,7 +914,7 @@ class MainWindow(QMainWindow):
         if getattr(sys, "frozen", False):
             QProcess.startDetached(sys.executable, [])
         else:
-            QProcess.startDetached(sys.executable, ["-m", "findash"])
+            QProcess.startDetached(sys.executable, ["-m", "aurantium"])
         self.close()
 
     def _on_command(self) -> None:
@@ -1102,7 +1102,7 @@ class MainWindow(QMainWindow):
             layout_version = 1  # malformed version — treat as current, try to load
         if layout_version > CURRENT_LAYOUT_VERSION:
             self.statusBar().showMessage(
-                "This layout was saved by a newer version of findash — "
+                "This layout was saved by a newer version of aurantium — "
                 "update to load it.",
                 6000,
             )
@@ -1141,7 +1141,7 @@ class MainWindow(QMainWindow):
     # -- layout file sharing (export a saved layout / import one) -------------
 
     def _export_named_layout(self, name: str) -> None:
-        """Write a saved layout to a shareable ``.findashlayout`` file."""
+        """Write a saved layout to a shareable ``.aurantiumlayout`` file."""
         doc = self.layout_store.get(name)
         if not doc:
             return
@@ -1151,7 +1151,7 @@ class MainWindow(QMainWindow):
             self,
             "Export layout",
             f"{name}{LAYOUT_EXT}",
-            f"findash layout (*{LAYOUT_EXT});;JSON (*.json)",
+            f"aurantium layout (*{LAYOUT_EXT});;JSON (*.json)",
         )
         if not fn:
             return
@@ -1168,7 +1168,7 @@ class MainWindow(QMainWindow):
             self,
             "Import layout",
             "",
-            f"findash layout (*{LAYOUT_EXT} *.json);;All files (*)",
+            f"aurantium layout (*{LAYOUT_EXT} *.json);;All files (*)",
         )
         if not fn:
             return
@@ -1184,7 +1184,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Import layout",
-                f"{path.name} isn't a valid findash layout file.",
+                f"{path.name} isn't a valid aurantium layout file.",
             )
             return
         name = str(doc.get("name") or path.stem).strip() or "Imported Layout"
@@ -1225,7 +1225,7 @@ class MainWindow(QMainWindow):
             self.hide()
             if self._tray is not None:
                 self._tray.showMessage(
-                    "findash",
+                    "aurantium",
                     "Still running in the tray — right-click the icon to quit.",
                     QSystemTrayIcon.MessageIcon.Information, 4000,
                 )

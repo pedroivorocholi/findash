@@ -1,4 +1,4 @@
-"""Entry point: ``python -m findash``."""
+"""Entry point: ``python -m aurantium``."""
 
 from __future__ import annotations
 
@@ -9,16 +9,16 @@ from dotenv import load_dotenv
 
 from .paths import BUNDLE_DIR, EXT_DIR
 
-APP_ID = "findash.terminal.desktop.1"
+APP_ID = "aurantium.terminal.desktop.1"
 
 # Name of the local IPC endpoint used to enforce a single running instance.
 # The first instance owns this server; later launches connect to it, ask it to
 # surface its window, then exit instead of opening a duplicate.
-_IPC_NAME = "findash.terminal.singleinstance"
+_IPC_NAME = "aurantium.terminal.singleinstance"
 
 
 def _running_instance_activated() -> bool:
-    """Return True if another findash is already running. When it is, hand it a
+    """Return True if another aurantium is already running. When it is, hand it a
     one-line 'activate' message over the local socket so it surfaces its window
     (from the tray or from behind other windows), and let this launch exit."""
     from PySide6.QtNetwork import QLocalSocket
@@ -62,7 +62,7 @@ def _surface_on_second_instance(server, win) -> None:
 
 
 def _set_windows_app_id() -> None:
-    """Give Windows an explicit AppUserModelID so the taskbar treats findash
+    """Give Windows an explicit AppUserModelID so the taskbar treats aurantium
     as its own application — its own icon, its own grouping — instead of
     folding it into the generic ``pythonw.exe`` host process."""
     if sys.platform != "win32":
@@ -76,14 +76,14 @@ def _set_windows_app_id() -> None:
 
 
 def _install_crash_logging() -> None:
-    """Always record unhandled exceptions to a size-capped ``findash.log`` next to
-    the app, so a crash leaves a trace even without FINDASH_DEBUG. Additive — it
+    """Always record unhandled exceptions to a size-capped ``aurantium.log`` next to
+    the app, so a crash leaves a trace even without AURANTIUM_DEBUG. Additive — it
     doesn't redirect normal stdout/stderr. PySide6 routes unhandled slot
     exceptions through ``sys.excepthook``, so Qt-callback crashes are captured too."""
     import threading
     import traceback as _tb
 
-    log_path = EXT_DIR / "findash.log"
+    log_path = EXT_DIR / "aurantium.log"
 
     def _write(header: str, text: str) -> None:
         try:
@@ -124,15 +124,54 @@ def _install_crash_logging() -> None:
 
 
 def _maybe_capture_output() -> None:
-    """A frozen build has no console. When FINDASH_DEBUG is set, tee stdout/err
+    """A frozen build has no console. When AURANTIUM_DEBUG is set, tee stdout/err
     to a log next to the exe so tracebacks (incl. panel build failures) surface."""
-    if os.environ.get("FINDASH_DEBUG"):
+    if os.environ.get("AURANTIUM_DEBUG"):
         try:
-            f = open(EXT_DIR / "findash_stderr.log", "w", encoding="utf-8")
+            f = open(EXT_DIR / "aurantium_stderr.log", "w", encoding="utf-8")
             sys.stdout = f
             sys.stderr = f
         except OSError:
             pass
+
+
+def _migrate_legacy_identity(app) -> None:
+    """One-time carry-over from the app's old name, ``findash`` (through
+    v1.4.3), to ``aurantium``. QSettings and QStandardPaths key off the Qt
+    app/organization name, so renaming it would otherwise strand existing
+    installs' saved layouts, alerts, theme, and history under the old
+    registry/config location. Best-effort and silent — never blocks startup."""
+    try:
+        from PySide6.QtCore import QSettings, QStandardPaths
+
+        app.setOrganizationName("findash")
+        app.setApplicationName("findash")
+        legacy_settings = QSettings()
+        legacy_keys = legacy_settings.allKeys()
+        legacy_config = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.AppConfigLocation
+        )
+
+        app.setOrganizationName("aurantium")
+        app.setApplicationName("aurantium")
+        settings = QSettings()
+        if legacy_keys and not settings.allKeys():
+            for key in legacy_keys:
+                settings.setValue(key, legacy_settings.value(key))
+            settings.sync()
+
+        config_dir = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.AppConfigLocation
+        )
+        if legacy_config and config_dir and legacy_config != config_dir:
+            import shutil
+            from pathlib import Path
+
+            old_dir, new_dir = Path(legacy_config), Path(config_dir)
+            if old_dir.is_dir() and not new_dir.exists():
+                shutil.copytree(old_dir, new_dir)
+    except Exception:  # pragma: no cover - best-effort, never fatal
+        pass
 
 
 def main() -> int:
@@ -144,10 +183,9 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
-    app.setApplicationName("findash")
-    app.setOrganizationName("findash")
+    _migrate_legacy_identity(app)
 
-    # Single instance: if findash is already running, tell it to surface its
+    # Single instance: if aurantium is already running, tell it to surface its
     # window and exit before building anything. Otherwise claim the lock — done
     # early so a rapid double-launch can't slip a second window through the gap.
     if _running_instance_activated():
@@ -156,7 +194,7 @@ def main() -> int:
 
     from PySide6.QtGui import QIcon
 
-    icon_path = BUNDLE_DIR / "findash.ico"
+    icon_path = BUNDLE_DIR / "aurantium.ico"
     app_icon = QIcon(str(icon_path)) if icon_path.is_file() else None
     if app_icon is not None:
         app.setWindowIcon(app_icon)
@@ -175,10 +213,10 @@ def main() -> int:
     # Built-in panels load as a package (frozen-safe); a user's optional
     # ``user_panels`` folder next to the app is scanned by file path.
     errors = discover_panels(
-        [EXT_DIR / "user_panels"], packages=("findash.panels",)
+        [EXT_DIR / "user_panels"], packages=("aurantium.panels",)
     )
     for err in errors:
-        print(f"[findash] panel failed to load:\n{err}", file=sys.stderr)
+        print(f"[aurantium] panel failed to load:\n{err}", file=sys.stderr)
 
     from .app import MainWindow
 
@@ -206,10 +244,10 @@ def main() -> int:
 
         startup_err = _tb.format_exc()
 
-    if os.environ.get("FINDASH_DEBUG") or startup_err or errors:
+    if os.environ.get("AURANTIUM_DEBUG") or startup_err or errors:
         try:
             default_json = BUNDLE_DIR / "layouts" / "default.json"
-            (EXT_DIR / "findash_startup.log").write_text(
+            (EXT_DIR / "aurantium_startup.log").write_text(
                 f"frozen: {getattr(sys, 'frozen', False)}\n"
                 f"panels registered: {len(PanelRegistry.all())}\n"
                 f"BUNDLE_DIR: {BUNDLE_DIR}\n"

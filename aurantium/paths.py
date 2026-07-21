@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# In dev, the package lives at app/findash/ so the project root is parent.parent.
+# In dev, the package lives at app/aurantium/ so the project root is parent.parent.
 _DEV_ROOT = Path(__file__).resolve().parent.parent
 
 if getattr(sys, "frozen", False):  # running inside a PyInstaller bundle

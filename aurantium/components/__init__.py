@@ -1,4 +1,4 @@
-"""Reusable UI building blocks shared across findash panels."""
+"""Reusable UI building blocks shared across aurantium panels."""
 
 from .market_table import (
     MarketTable,

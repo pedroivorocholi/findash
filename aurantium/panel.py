@@ -2,7 +2,7 @@
 
 A panel is one Python class in one file::
 
-    from findash.panel import Panel, register_panel
+    from aurantium.panel import Panel, register_panel
 
     @register_panel(id="my_panel", title="My Panel", category="Custom")
     class MyPanel(Panel):
@@ -92,7 +92,7 @@ def register_panel(id: str, title: str, category: str = "General"):
 
 def _package_name(directory: Path) -> str | None:
     """Dotted module path if ``directory`` is a package on sys.path
-    (e.g. findash/panels -> "findash.panels"), else None."""
+    (e.g. aurantium/panels -> "aurantium.panels"), else None."""
     if not (directory / "__init__.py").exists():
         return None
     parts = [directory.name]
@@ -104,7 +104,7 @@ def _package_name(directory: Path) -> str | None:
 
 
 def discover_package_panels(package: str) -> list[str]:
-    """Import every submodule of an installed package (e.g. ``findash.panels``)
+    """Import every submodule of an installed package (e.g. ``aurantium.panels``)
     so their ``@register_panel`` decorators run.
 
     Enumerates submodule names via several strategies so it works both in
@@ -162,7 +162,7 @@ def discover_panels(
             if path.name.startswith("_"):
                 continue
             try:
-                mod_name = f"findash_user_panels_{path.stem}"
+                mod_name = f"aurantium_user_panels_{path.stem}"
                 if mod_name in sys.modules:
                     continue
                 spec = importlib.util.spec_from_file_location(mod_name, path)

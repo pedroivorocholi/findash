@@ -24,7 +24,7 @@ from PySide6.QtCore import QStandardPaths
 def _default_db_path() -> Path:
     base = QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.CacheLocation
-    ) or str(Path.home() / ".findash" / "cache")
+    ) or str(Path.home() / ".aurantium" / "cache")
     return Path(base) / "topics.db"
 
 

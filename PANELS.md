@@ -1,6 +1,6 @@
-# PANELS.md — customize your own findash
+# PANELS.md — customize your own aurantium
 
-findash is a personal, Bloomberg-style market dashboard designed to be forked
+aurantium is a personal, Bloomberg-style market dashboard designed to be forked
 and customized **without touching core code**. This file is the complete guide.
 
 ## Get your own copy running
@@ -12,7 +12,7 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt   # Windows
 # .venv/bin/python -m pip install -r requirements.txt     # macOS/Linux
 copy .env.example .env    # optional — only needed for keyed providers
-.venv\Scripts\python -m findash
+.venv\Scripts\python -m aurantium
 ```
 
 No API keys are required: quotes, charts, news, and analyst data come from
@@ -97,7 +97,7 @@ Drop a file into `user_panels/`, restart the app, and it appears under
 Panels ▸ Add Panel. Start by copying `user_panels/example_macro.py`.
 
 ```python
-from findash.panel import Panel, register_panel
+from aurantium.panel import Panel, register_panel
 from PySide6.QtWidgets import QLabel
 
 @register_panel(id="spread", title="10Y Spread", category="Custom")
@@ -136,10 +136,10 @@ run on the GUI thread, so just update widgets directly.
 
 ## Write your own data provider
 
-Providers live in `findash/providers/`. Implement two methods and register:
+Providers live in `aurantium/providers/`. Implement two methods and register:
 
 ```python
-from findash.datahub import DataHub, Provider, TopicPolicy
+from aurantium.datahub import DataHub, Provider, TopicPolicy
 
 class MyProvider(Provider):
     def topic_patterns(self):
@@ -158,7 +158,7 @@ class MyProvider(Provider):
             hub.publish_error(topic, str(exc))
 ```
 
-Register it in `findash/providers/__init__.py` (`register_all_providers`),
+Register it in `aurantium/providers/__init__.py` (`register_all_providers`),
 with a policy: `hub.set_policy("myapi:*", TopicPolicy(ttl_s=600))`.
 API keys: read from `os.environ` only, document them in `.env.example` —
 never hardcode secrets.
@@ -175,7 +175,7 @@ with your custom panel files and someone else gets your exact terminal.
 
 ```
 app/
-  findash/
+  aurantium/
     datahub.py         # topic bus: subscribe/publish, TTL scheduler, cache
     symbol_context.py  # link groups (the cross-panel click propagation)
     panel.py           # Panel base class + registry + discovery  ← your API
@@ -187,5 +187,5 @@ app/
   layouts/             # ← saved layouts (default.json auto-loads)
 ```
 
-Core (`findash/`) vs. yours (`user_panels/`, `layouts/`, `.env`): keeping your
+Core (`aurantium/`) vs. yours (`user_panels/`, `layouts/`, `.env`): keeping your
 work in the latter means pulling upstream updates never conflicts.

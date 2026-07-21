@@ -49,7 +49,7 @@ RSS_FEEDS: list[tuple[str, str, str]] = [
 RSS_CACHE_TTL = 180.0  # seconds; keeps feed polling polite across panels
 RSS_FETCH_TIMEOUT = 6.0
 RSS_MIN_MATCHES = 5  # fewer matches than this -> fall through to next source
-_RSS_HEADERS = {"User-Agent": "Mozilla/5.0 (findash RSS reader)"}
+_RSS_HEADERS = {"User-Agent": "Mozilla/5.0 (aurantium RSS reader)"}
 
 _rss_lock = threading.Lock()
 _rss_cache: dict[str, Any] = {"ts": 0.0, "items": []}

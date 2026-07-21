@@ -65,13 +65,13 @@ _SHORTCUTS_HTML = _page_css() + f"""
   {_row(_kbd("F5"), "Refresh all live feeds (quotes, news, charts, financials)")}
   {_row(_kbd("F11"), "Maximize the focused panel — press again to restore")}
   {_row(_kbd("Esc"), "Restore a maximized panel")}
-  {_row(_kbd("Shift", "F11"), "Toggle borderless full screen (findash opens in full screen)")}
+  {_row(_kbd("Shift", "F11"), "Toggle borderless full screen (aurantium opens in full screen)")}
   {_row(_kbd("Ctrl", "W"), "Close the focused panel")}
   {_row(_kbd("Ctrl", "Shift", "T"), "Reopen the last panel you closed")}
   {_row(_kbd("F1"), "Open this Keyboard Shortcuts &amp; Guide window")}
   {_row(_kbd("Ctrl", "Z"), "Undo the last edit — drawing, watchlist / portfolio / monitor change")}
   {_row(_kbd("Ctrl", "S"), "Save the current layout under a name")}
-  {_row(_kbd("Ctrl", "Q"), "Quit findash")}
+  {_row(_kbd("Ctrl", "Q"), "Quit aurantium")}
 </table>
 
 <h2>Panels &amp; symbols</h2>
@@ -139,7 +139,7 @@ theme, color-blind mode, layouts, API keys, the guide, updates, and quit.</p>
 
 <h2>Theme &amp; accessibility</h2>
 <p>Switch between the <b>dark</b> (default) and <b>light</b> theme under
-<b>Settings &#9656; Theme</b>. findash restarts to apply it, so the whole
+<b>Settings &#9656; Theme</b>. aurantium restarts to apply it, so the whole
 interface — charts included — matches the theme you pick. <b>Settings &#9656;
 Color-blind mode</b> swaps the green/red up-down colors for a deuteranopia-safe
 blue/orange pair and adds <b>▲ / ▼</b> direction marks to change values, so
@@ -170,7 +170,7 @@ layout.</p>
 
 <h2>Price alerts &amp; the tray</h2>
 <p>Add a <b>Price Alerts</b> panel to set threshold rules (e.g. <i>AAPL price
-above 200</i>, or <i>TSLA change% below −5</i>). When a rule triggers, findash
+above 200</i>, or <i>TSLA change% below −5</i>). When a rule triggers, aurantium
 shows a tray notification — rules keep running in the background as long as the
 app is open, and each fires once until the condition resets. Right-click the tray
 icon to Show/Hide/Quit; turn on <b>Close to tray</b> — there or under
@@ -209,11 +209,11 @@ Excel export and clipboard copy from its toolbar.</p>
 <h2>Layouts</h2>
 <p>Use <b>Settings &#9656; Layout</b> to save the current arrangement under a name
 (<b>Ctrl+S</b>), reload a saved one, or reset to the default. Layouts can be
-exported to a shareable <code>.findashlayout</code> file and imported on another
+exported to a shareable <code>.aurantiumlayout</code> file and imported on another
 machine. Your last arrangement is auto-saved and restored on the next launch.</p>
 
 <h2>Data sources</h2>
-<p>findash runs out of the box on free, keyless sources (Yahoo Finance, Google
+<p>aurantium runs out of the box on free, keyless sources (Yahoo Finance, Google
 News — delayed). Connect optional free API keys from <b>Settings &#9656; API
 Keys…</b> (Finnhub, Twelve Data, FRED, EIA, NewsAPI) for richer, faster data. Press
 <b>F5</b> anytime to force-refresh every live feed. Recently-seen data is cached
@@ -228,7 +228,7 @@ class OnboardingDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("findash — Keyboard Shortcuts & Guide")
+        self.setWindowTitle("aurantium — Keyboard Shortcuts & Guide")
         self.resize(660, 580)
 
         layout = QVBoxLayout(self)

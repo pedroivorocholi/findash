@@ -27,7 +27,7 @@ from .paths import BUNDLE_DIR
 
 # Set GITHUB_USER once, when you create the public repo (Option A).
 GITHUB_USER = "pedroivorocholi"
-GITHUB_REPO = "findash"
+GITHUB_REPO = "aurantium"
 
 # The appcast is served raw from the repo's default branch. WinSparkle fetches
 # this over plain HTTPS (no auth) — the repo must be PUBLIC.
@@ -43,7 +43,7 @@ EDDSA_PUBLIC_KEY = "7uoEAAvngbcIiyHRnkEKbqHveq7yfNaKsC646v3omxw="
 
 # Where WinSparkle stores its own settings (last check time, the user's
 # "check automatically" choice). Kept under the app's own key.
-_REGISTRY_PATH = r"Software\findash\WinSparkle"
+_REGISTRY_PATH = r"Software\aurantium\WinSparkle"
 _CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # daily
 
 _dll = None  # loaded WinSparkle.dll handle, or None when unavailable
@@ -106,7 +106,7 @@ def init() -> bool:
         lib.win_sparkle_set_appcast_url(APPCAST_URL.encode("utf-8"))
         lib.win_sparkle_set_registry_path(_REGISTRY_PATH.encode("utf-8"))
         lib.win_sparkle_set_eddsa_public_key(EDDSA_PUBLIC_KEY.encode("utf-8"))
-        lib.win_sparkle_set_app_details("findash", "findash", __version__)
+        lib.win_sparkle_set_app_details("aurantium", "aurantium", __version__)
         lib.win_sparkle_set_update_check_interval(_CHECK_INTERVAL_SECONDS)
         # Enable automatic checks. On first run WinSparkle asks the user for
         # permission before the first silent check.

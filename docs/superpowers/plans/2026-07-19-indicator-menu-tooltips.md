@@ -6,7 +6,7 @@
 
 **Architecture:** `_IndicatorSpec` (chart.py) gains a `description: str` field, populated once per entry in `INDICATOR_SPECS`. `_show_add_menu` sets each `QAction`'s tooltip from it and enables tooltip display on the `QMenu`.
 
-**Tech Stack:** Python, PySide6 (`QAction.setToolTip`, `QMenu.setToolTipsVisible`). No test framework in this repo — verified by running the app (`.venv\Scripts\python -m findash`) and by a headless (`QT_QPA_PLATFORM=offscreen`) script asserting on the real `QAction` objects, same approach used for the two prior chart.py features in this project's history.
+**Tech Stack:** Python, PySide6 (`QAction.setToolTip`, `QMenu.setToolTipsVisible`). No test framework in this repo — verified by running the app (`.venv\Scripts\python -m aurantium`) and by a headless (`QT_QPA_PLATFORM=offscreen`) script asserting on the real `QAction` objects, same approach used for the two prior chart.py features in this project's history.
 
 ## Global Constraints
 
@@ -19,8 +19,8 @@
 ### Task 1: Add descriptions to `_IndicatorSpec` and wire up the menu tooltips
 
 **Files:**
-- Modify: `findash/panels/chart.py:159-183` (`_IndicatorSpec` class + `INDICATOR_SPECS` dict)
-- Modify: `findash/panels/chart.py:647-654` (`_show_add_menu`)
+- Modify: `aurantium/panels/chart.py:159-183` (`_IndicatorSpec` class + `INDICATOR_SPECS` dict)
+- Modify: `aurantium/panels/chart.py:647-654` (`_show_add_menu`)
 
 **Interfaces:**
 - Consumes: nothing new from other tasks (this is the only task).
@@ -125,7 +125,7 @@ Run this from `app/` (adjust the path if your shell differs):
 QT_QPA_PLATFORM=offscreen .venv/Scripts/python -c "
 from PySide6.QtWidgets import QApplication
 app = QApplication.instance() or QApplication([])
-from findash.panels.chart import ChartPanel, INDICATOR_SPECS
+from aurantium.panels.chart import ChartPanel, INDICATOR_SPECS
 
 p = ChartPanel(); p.build()
 
@@ -145,7 +145,7 @@ print('OK: all 7 descriptions present and correctly worded')
 "
 ```
 
-Run: `.venv\Scripts\python -m findash`
+Run: `.venv\Scripts\python -m aurantium`
 
 In the running app, open the Chart panel, click "+" in the INDICATORS row, and hover each of the 7 entries (Add SMA…, Add EMA…, Add BB…, Add VWAP, Add VOL, Add RSI…, Add MACD). Confirm a tooltip appears for each, after the OS's normal hover delay, matching the description table in the spec. Confirm clicking an entry still works exactly as before (period dialog where applicable, then the color picker, then the indicator is added).
 
@@ -154,7 +154,7 @@ Expected: the script prints `OK: all 7 descriptions present and correctly worded
 - [ ] **Step 4: Commit**
 
 ```bash
-git add findash/panels/chart.py
+git add aurantium/panels/chart.py
 git commit -m "feat: show indicator descriptions as tooltips in the add menu"
 ```
 

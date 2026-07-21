@@ -3,7 +3,7 @@
 Read this file top to bottom, then copy it to write your own panel. A panel
 is one Python file in ``user_panels/`` (this directory) with exactly one
 ``Panel`` subclass decorated with ``@register_panel``. Drop the file here,
-restart findash, and it shows up in the Panels ▸ Add Panel menu — nothing
+restart aurantium, and it shows up in the Panels ▸ Add Panel menu — nothing
 else to register.
 
 The three things every panel needs:
@@ -17,10 +17,10 @@ The three things every panel needs:
      The callback may fire immediately with a cached value, and again
      whenever the topic refreshes — write it to be idempotent.
 
-Note the import style below: this file lives OUTSIDE the ``findash``
+Note the import style below: this file lives OUTSIDE the ``aurantium``
 package (in ``user_panels/``, loaded by file path at startup), so imports
-are absolute (``from findash...``) rather than relative (``from ..``) like
-the built-in panels under ``findash/panels/`` use.
+are absolute (``from aurantium...``) rather than relative (``from ..``) like
+the built-in panels under ``aurantium/panels/`` use.
 
 To make your own panel: copy this file, rename it, change the ``id=`` /
 ``title=`` in ``@register_panel`` below to something unique, then replace
@@ -42,8 +42,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
-from findash.panel import Panel, register_panel
-from findash.theme import ACCENT, DOWN, FG_DIM, UP
+from aurantium.panel import Panel, register_panel
+from aurantium.theme import ACCENT, DOWN, FG_DIM, UP
 
 # Commodities shown in the mini-table below (World Bank Commodities topics).
 COMMODITY_CODES = ["GOLD", "WTI", "COPPER"]

@@ -18,7 +18,7 @@ class LayoutStore:
     def __init__(self) -> None:
         base = QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.AppConfigLocation
-        ) or str(Path.home() / ".findash")
+        ) or str(Path.home() / ".aurantium")
         self._path = Path(base) / "layouts.json"
         self._data: dict = {"layouts": {}, "last": None}
         self._load()

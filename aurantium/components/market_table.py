@@ -1,4 +1,4 @@
-"""MarketTable — the shared table widget used by findash's data panels.
+"""MarketTable — the shared table widget used by aurantium's data panels.
 
 A thin ``QTableWidget`` subclass that bakes in the terminal's table conventions
 (read-only, row selection, no vertical header, zebra striping, no grid) and adds
@@ -45,7 +45,7 @@ _NUM_SUFFIX = {"T": 1e12, "B": 1e9, "M": 1e6, "K": 1e3}
 def parse_numeric(text: str) -> float | None:
     """Best-effort parse of a *displayed* cell value to a float, for sorting.
 
-    Understands the formats findash panels actually render: thousands
+    Understands the formats aurantium panels actually render: thousands
     separators, ``$``/``%``/``+`` decoration, parenthesised negatives, and
     ``T``/``B``/``M``/``K`` magnitude suffixes (so ``"1.2M"`` > ``"900K"``).
     Returns ``None`` when the text isn't a single number (blanks, ``"-"``,
@@ -126,7 +126,7 @@ class _LoadingOverlay(QWidget):
 
 
 class MarketTable(QTableWidget):
-    """QTableWidget with findash defaults, a loading overlay, and CSV export."""
+    """QTableWidget with aurantium defaults, a loading overlay, and CSV export."""
 
     def __init__(
         self, rows: int = 0, cols: int = 0, parent: QWidget | None = None

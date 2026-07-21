@@ -1,4 +1,4 @@
-"""Built-in findash panels.
+"""Built-in aurantium panels.
 
 Normally discovered dynamically (see ``discover_package_panels``). ``BUILTIN``
 is an explicit fallback used when dynamic enumeration finds nothing — which is

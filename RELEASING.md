@@ -1,6 +1,6 @@
-# Releasing findash (with WinSparkle auto-updates)
+# Releasing aurantium (with WinSparkle auto-updates)
 
-findash ships updates through [WinSparkle](https://winsparkle.org/). On launch
+aurantium ships updates through [WinSparkle](https://winsparkle.org/). On launch
 the app checks an **appcast** feed once a day; when a newer, correctly-signed
 installer is available it offers to download and run it. Users click once — no
 manual re-install.
@@ -18,16 +18,16 @@ WinSparkle downloads the appcast and installer over plain HTTPS with **no
 authentication**, so both must live in a **public** repo.
 
 ```bash
-cd app            # the folder that holds findash/, installer.iss, appcast.xml
+cd app            # the folder that holds aurantium/, installer.iss, appcast.xml
 git init
 git add .
-git commit -m "findash 1.0.0"
-gh repo create findash --public --source=. --push
+git commit -m "aurantium 1.0.0"
+gh repo create aurantium --public --source=. --push
 ```
 
 ### 2. Point the app at your feed
 
-In `findash/updater.py`, set your GitHub username:
+In `aurantium/updater.py`, set your GitHub username:
 
 ```python
 GITHUB_USER = "your-actual-username"   # was "YOUR_GITHUB_USERNAME"
@@ -51,7 +51,7 @@ on the `main` branch. If you keep `appcast.xml` in a subfolder, adjust the URL.
 - Writes the **private** key to `tools/eddsa_private.key` — **keep it secret,
   back it up.** It's gitignored. If you lose it, existing users can no longer
   verify updates and you'd have to ship a new public key in a fresh installer.
-- Prints the **public** key. Paste the printed line into `findash/updater.py`:
+- Prints the **public** key. Paste the printed line into `aurantium/updater.py`:
 
   ```python
   EDDSA_PUBLIC_KEY = "…printed value…"
@@ -62,7 +62,7 @@ on the `main` branch. If you keep `appcast.xml` in a subfolder, adjust the URL.
 Download the latest WinSparkle release zip from
 <https://github.com/vslavik/winsparkle/releases>, and copy the **64-bit** DLL
 (`x64/WinSparkle.dll` in the zip) to `app/WinSparkle.dll` (next to
-`findash.spec`). `findash.spec` bundles it automatically; it's what
+`aurantium.spec`). `aurantium.spec` bundles it automatically; it's what
 `updater.py` loads at runtime.
 
 > The updater stays fully disabled until `GITHUB_USER` **and**
@@ -77,7 +77,7 @@ Say you're going from 1.0.0 → **1.1.0**.
 
 ### 1. Bump the version (two files, keep in sync)
 
-- `findash/__init__.py` → `__version__ = "1.1.0"`
+- `aurantium/__init__.py` → `__version__ = "1.1.0"`
 - `installer.iss` → `AppVersion=1.1.0`
 
 WinSparkle compares `__version__` against the appcast's `sparkle:version`.
@@ -87,14 +87,14 @@ WinSparkle compares `__version__` against the appcast's `sparkle:version`.
 Follow `BUILD.md`:
 
 ```bash
-.venv/Scripts/pyinstaller findash.spec --noconfirm     # -> dist/findash.exe
-# then compile installer.iss with Inno Setup            -> dist/findash-setup.exe
+.venv/Scripts/pyinstaller aurantium.spec --noconfirm     # -> dist/aurantium.exe
+# then compile installer.iss with Inno Setup            -> dist/aurantium-setup.exe
 ```
 
 ### 3. Sign the installer
 
 ```bash
-.venv/Scripts/python tools/sign_update.py dist/findash-setup.exe
+.venv/Scripts/python tools/sign_update.py dist/aurantium-setup.exe
 ```
 
 Note the printed `length:` and `sparkle:edSignature="…"`.
@@ -105,11 +105,11 @@ Add a **new `<item>` at the top** (keep older ones for history):
 
 ```xml
 <item>
-  <title>findash 1.1.0</title>
+  <title>aurantium 1.1.0</title>
   <description><![CDATA[ <ul><li>What changed…</li></ul> ]]></description>
   <pubDate>Fri, 01 Aug 2026 12:00:00 +0000</pubDate>
   <enclosure
-    url="https://github.com/your-username/findash/releases/download/v1.1.0/findash-setup.exe"
+    url="https://github.com/your-username/aurantium/releases/download/v1.1.0/aurantium-setup.exe"
     sparkle:version="1.1.0"
     sparkle:os="windows"
     sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
@@ -124,12 +124,12 @@ Add a **new `<item>` at the top** (keep older ones for history):
 - `pubDate` in RFC-822 (e.g. `date -R`).
 - **`sparkle:installerArguments` is required** — it makes WinSparkle run the
   Inno installer silently instead of showing the full setup wizard. `/VERYSILENT`
-  hides the UI; `/FORCECLOSEAPPLICATIONS` closes a running findash so its files
+  hides the UI; `/FORCECLOSEAPPLICATIONS` closes a running aurantium so its files
   can be replaced. Omit it and every update pops the full wizard.
 - **Relaunch** is handled by the installer, not the appcast (WinSparkle does not
   relaunch the app itself, and `/RESTARTAPPLICATIONS` is unreliable). Silent
   auto-updates relaunch from `installer.iss`'s `[Code]` `CurStepChanged` handler,
-  which does `Sleep(6000)` then `Exec({app}\findash.exe)`. **The delay is
+  which does `Sleep(6000)` then `Exec({app}\aurantium.exe)`. **The delay is
   required:** launched the instant the update finishes, the freshly-written numpy
   C-extension DLLs aren't in place yet and the app crashes with "Importing the
   numpy C-extensions failed" — a slightly later launch works. Interactive installs
@@ -139,20 +139,20 @@ Add a **new `<item>` at the top** (keep older ones for history):
 ### 5. Publish the GitHub release
 
 ```bash
-gh release create v1.1.0 dist/findash-setup.exe --title "findash 1.1.0" --notes "…"
+gh release create v1.1.0 dist/aurantium-setup.exe --title "aurantium 1.1.0" --notes "…"
 ```
 
 ### 6. Push the updated appcast
 
 ```bash
-git add appcast.xml findash/__init__.py installer.iss
-git commit -m "findash 1.1.0"
+git add appcast.xml aurantium/__init__.py installer.iss
+git commit -m "aurantium 1.1.0"
 git push
 ```
 
 ### 7. Verify
 
-On a machine running the **previous** version, launch findash and pick
+On a machine running the **previous** version, launch aurantium and pick
 **Help ▸ Check for Updates…**. It should find 1.1.0, verify the signature, and
 offer to install. (A signature/URL/length mismatch shows a download or
 verification error instead — fix the appcast and retry.)

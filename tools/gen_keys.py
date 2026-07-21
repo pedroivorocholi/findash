@@ -7,7 +7,7 @@ Run this ONCE, ever:
 - The PRIVATE key is written to ``tools/eddsa_private.key`` (base64). Keep it
   secret and back it up — anyone with it can sign updates your users will
   install. It is gitignored; never commit it.
-- The PUBLIC key is printed. Paste it into ``findash/updater.py`` as
+- The PUBLIC key is printed. Paste it into ``aurantium/updater.py`` as
   ``EDDSA_PUBLIC_KEY``. It is safe to publish.
 
 Requires ``cryptography`` (``pip install -r requirements-dev.txt``).
@@ -49,7 +49,7 @@ def main() -> int:
     print("Ed25519 key pair generated.\n")
     print(f"  Private key -> {PRIVATE_KEY_FILE}")
     print("  (KEEP SECRET - BACK UP - never commit; it's gitignored)\n")
-    print("Paste this line into findash/updater.py:\n")
+    print("Paste this line into aurantium/updater.py:\n")
     print(f'    EDDSA_PUBLIC_KEY = "{base64.b64encode(pub_raw).decode()}"')
     return 0
 

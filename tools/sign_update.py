@@ -1,6 +1,6 @@
 """Sign a release file for the WinSparkle appcast.
 
-    python tools/sign_update.py dist/findash-setup.exe
+    python tools/sign_update.py dist/aurantium-setup.exe
 
 Prints the file length and the base64 EdDSA signature. Copy both into
 ``appcast.xml`` on the matching ``<enclosure>`` (``length`` and

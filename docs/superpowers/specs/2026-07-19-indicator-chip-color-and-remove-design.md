@@ -1,7 +1,7 @@
 # Indicator chip: color-on-add + discoverable remove
 
 Date: 2026-07-19
-File touched: `findash/panels/chart.py`
+File touched: `aurantium/panels/chart.py`
 
 ## Problem
 

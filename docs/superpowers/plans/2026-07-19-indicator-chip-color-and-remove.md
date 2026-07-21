@@ -4,9 +4,9 @@
 
 **Goal:** Let the user pick an indicator's color at the moment they add it to the chart, and give every indicator chip an always-visible × button so removing it doesn't require discovering the right-click menu.
 
-**Architecture:** Both changes live entirely in `findash/panels/chart.py`, inside the `ChartPanel` class and its `_IndicatorInstance` helper. No new files, no new dependencies — `QColorDialog` and `QWidget` (PySide6) cover both changes.
+**Architecture:** Both changes live entirely in `aurantium/panels/chart.py`, inside the `ChartPanel` class and its `_IndicatorInstance` helper. No new files, no new dependencies — `QColorDialog` and `QWidget` (PySide6) cover both changes.
 
-**Tech Stack:** Python, PySide6 (Qt widgets), pyqtgraph. No test framework in this repo — `findash` is a GUI app verified by running it (`.venv\Scripts\python -m findash`) and exercising the flow by hand; there is no pytest/unittest suite to extend.
+**Tech Stack:** Python, PySide6 (Qt widgets), pyqtgraph. No test framework in this repo — `aurantium` is a GUI app verified by running it (`.venv\Scripts\python -m aurantium`) and exercising the flow by hand; there is no pytest/unittest suite to extend.
 
 ## Global Constraints
 
@@ -14,15 +14,15 @@
 - Scope is indicators only (the "+" menu / chip system) — chart-type and series colors (candles/bars/line/grid/background) are untouched.
 - No confirmation dialogs on remove (× or right-click) — matches existing behavior.
 - The too-dark rule (`QColor.lightness() < 60` is rejected) already exists for recoloring (`_recolor_indicator`) and must be reused for the new add-time picker, with the same status message text style.
-- All edits target `findash/panels/chart.py`; line numbers below are from the file's current state (1333 lines) and will shift slightly as earlier tasks land — re-locate by the surrounding code shown, not by line number alone.
+- All edits target `aurantium/panels/chart.py`; line numbers below are from the file's current state (1333 lines) and will shift slightly as earlier tasks land — re-locate by the surrounding code shown, not by line number alone.
 
 ---
 
 ### Task 1: Color picker when adding an indicator
 
 **Files:**
-- Modify: `findash/panels/chart.py:17-29` (imports — no change needed here, `QColorDialog` is already imported)
-- Modify: `findash/panels/chart.py:641-652` (`_add_indicator_ui`)
+- Modify: `aurantium/panels/chart.py:17-29` (imports — no change needed here, `QColorDialog` is already imported)
+- Modify: `aurantium/panels/chart.py:641-652` (`_add_indicator_ui`)
 
 **Interfaces:**
 - Consumes: `self._next_color() -> str` (chart.py:627-630, already exists — returns next hex color from `INDICATOR_PALETTE` and advances the rotation), `self.set_status(msg: str) -> None` (existing `Panel` method used elsewhere in this file, e.g. chart.py:721), `INDICATOR_SPECS[kind].label -> str` (existing).
@@ -90,7 +90,7 @@ with:
 
 - [x] **Step 3: Manually verify**
 
-Run: `.venv\Scripts\python -m findash`
+Run: `.venv\Scripts\python -m aurantium`
 
 In the running app, open the Chart panel for any symbol and, for each of the following, click "+" in the INDICATORS row:
 
@@ -106,7 +106,7 @@ Expected: all six behave as described, no exceptions in the console.
 - [x] **Step 4: Commit**
 
 ```bash
-git add findash/panels/chart.py
+git add aurantium/panels/chart.py
 git commit -m "feat: let user pick indicator color when adding it to the chart"
 ```
 
@@ -115,10 +115,10 @@ git commit -m "feat: let user pick indicator color when adding it to the chart"
 ### Task 2: Always-visible × remove button on indicator chips
 
 **Files:**
-- Modify: `findash/panels/chart.py:186-201` (`_IndicatorInstance.__init__`)
-- Modify: `findash/panels/chart.py:17-29` (import `QWidget`)
-- Modify: `findash/panels/chart.py:666-680` (`_build_chip`)
-- Modify: `findash/panels/chart.py:741-746` (`_remove_indicator`)
+- Modify: `aurantium/panels/chart.py:186-201` (`_IndicatorInstance.__init__`)
+- Modify: `aurantium/panels/chart.py:17-29` (import `QWidget`)
+- Modify: `aurantium/panels/chart.py:666-680` (`_build_chip`)
+- Modify: `aurantium/panels/chart.py:741-746` (`_remove_indicator`)
 
 **Interfaces:**
 - Consumes: `self._chips_row: QHBoxLayout` (existing, chart.py:469), `self._add_btn: QPushButton` (existing, chart.py:470-473), `self._style_chip(inst) -> None` (existing, chart.py:682-692), `self._show_chip_menu(inst, pos) -> None` (existing, chart.py:694-707), `self._on_chip_toggled(inst, checked) -> None` (existing, chart.py:709-714), `self._remove_indicator(inst) -> None` (this task modifies it), theme constants `FG_DIM`, `DOWN` (already imported, chart.py:32).
@@ -249,7 +249,7 @@ with:
 
 - [x] **Step 5: Manually verify**
 
-Run: `.venv\Scripts\python -m findash`
+Run: `.venv\Scripts\python -m aurantium`
 
 In the running app, open the Chart panel for any symbol:
 
@@ -265,7 +265,7 @@ Expected: all six behave as described, no exceptions in the console, no leftover
 - [x] **Step 6: Commit**
 
 ```bash
-git add findash/panels/chart.py
+git add aurantium/panels/chart.py
 git commit -m "feat: add always-visible remove button to indicator chips"
 ```
 
