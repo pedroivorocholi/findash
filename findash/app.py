@@ -59,6 +59,10 @@ class MainWindow(QMainWindow):
         self._loading_layout = False  # guard: mass-close during layout swap isn't a user close
         self._maximizing = False  # guard: hiding siblings is not a real close
         self._last_refresh_all = 0.0  # monotonic timestamp, debounces F5
+        # OS full-screen (borderless, covers the taskbar). Distinct from the
+        # in-window panel-maximize on F11. Tracked so restoring from the tray
+        # returns to full screen rather than a small window.
+        self._want_fullscreen = False
         self.layout_store = LayoutStore()
 
         # -- command bar (Bloomberg command-line analog): type ticker, Enter
@@ -268,9 +272,35 @@ class MainWindow(QMainWindow):
         and the single-instance handler that fires when a second launch asks the
         already-running instance to surface (from the tray or from behind other
         windows) instead of opening a duplicate."""
-        self.showNormal()  # also un-hides a window closed to the tray
+        if self._want_fullscreen:
+            self.showFullScreen()  # un-hide back into full screen, not a small window
+        else:
+            self.showNormal()  # also un-hides a window closed to the tray
         self.raise_()
         self.activateWindow()
+
+    # -- OS full screen (borderless; distinct from F11 panel-maximize) -------
+
+    def enter_fullscreen(self) -> None:
+        """Show the window borderless, filling the screen. Called at launch so
+        findash opens in full screen; keeps the Settings ▸ Full Screen check in
+        sync without re-triggering the toggle."""
+        self._want_fullscreen = True
+        act = getattr(self, "_fullscreen_act", None)
+        if act is not None and not act.isChecked():
+            act.blockSignals(True)
+            act.setChecked(True)
+            act.blockSignals(False)
+        self.showFullScreen()
+
+    def _set_window_fullscreen(self, on: bool) -> None:
+        """Settings ▸ Full Screen / Shift+F11 handler. Leaving full screen returns
+        to a maximized window (the app's normal un-fullscreen size)."""
+        self._want_fullscreen = on
+        if on:
+            self.showFullScreen()
+        else:
+            self.showMaximized()
 
     def _quit_app(self) -> None:
         self._force_quit = True
@@ -581,6 +611,15 @@ class MainWindow(QMainWindow):
         a_tray.toggled.connect(self._set_close_to_tray)
         self._settings_tray_act = a_tray
         m.addAction(a_tray)
+
+        a_fs = QAction("Full Screen", self)
+        a_fs.setCheckable(True)
+        a_fs.setChecked(self._want_fullscreen)  # set before connecting
+        a_fs.setShortcut(QKeySequence("Shift+F11"))  # F11 is panel-maximize
+        a_fs.setToolTip("Borderless full screen (covers the taskbar)")
+        a_fs.toggled.connect(self._set_window_fullscreen)
+        self._fullscreen_act = a_fs
+        m.addAction(a_fs)
 
         m.addSeparator()
 

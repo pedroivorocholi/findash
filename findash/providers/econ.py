@@ -13,6 +13,12 @@ from typing import Any, Optional
 import requests
 
 from ..datahub import DataHub, Provider
+from ._yf import (
+    RATE_LIMIT_GATE,
+    RATE_LIMIT_MESSAGE,
+    publish_fetch_error,
+    with_retry,
+)
 
 
 def _as_float(x: Any) -> Optional[float]:
@@ -185,11 +191,14 @@ class EconProvider(Provider):
         if symbol is None:
             hub.publish_error(topic, f"unknown commodity code: {code}")
             return
+        if RATE_LIMIT_GATE.blocked():
+            hub.publish_error(topic, RATE_LIMIT_MESSAGE)
+            return
         try:
             import yfinance as yf
 
             tkr = yf.Ticker(symbol)
-            hist = tkr.history(period="3mo", interval="1d")
+            hist = with_retry(lambda: tkr.history(period="3mo", interval="1d"))
             if hist is None or hist.empty:
                 hub.publish_error(topic, f"no data for {code} ({symbol})")
                 return
@@ -214,7 +223,7 @@ class EconProvider(Provider):
                 },
             )
         except Exception as exc:
-            hub.publish_error(topic, f"commodity fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "commodity fetch failed", exc)
 
     # -- CFTC Commitment of Traders -----------------------------------------
 

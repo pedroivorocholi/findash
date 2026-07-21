@@ -193,9 +193,10 @@ def main() -> int:
             lambda: _surface_on_second_instance(ipc_server, win)
         )
         _surface_on_second_instance(ipc_server, win)
-    # launch filling the screen; the 1500x900 set in MainWindow stays as the
-    # un-maximized size when the user restores the window
-    win.showMaximized()
+    # launch in borderless full screen (covers the taskbar); toggle off with
+    # Settings ▸ Full Screen / Shift+F11, which drops back to a maximized window.
+    # The 1500x900 set in MainWindow stays as the restore size.
+    win.enter_fullscreen()
 
     startup_err = ""
     try:

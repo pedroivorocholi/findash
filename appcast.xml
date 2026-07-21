@@ -20,6 +20,34 @@
     <language>en</language>
 
     <item>
+      <title>findash 1.4.3</title>
+      <description><![CDATA[
+        <style>
+          html, body { background:#ffffff; color:#141414; margin:0;
+                       padding:10px 12px; font-family:'Segoe UI', Arial, sans-serif;
+                       font-size:13px; line-height:1.4; }
+          h3 { margin:0 0 8px; font-size:15px; color:#111111; }
+          ul { margin:0; padding-left:20px; }
+          li { margin:4px 0; }
+        </style>
+        <h3>What&rsquo;s new in 1.4.3</h3>
+        <ul>
+          <li><b>Fewer &ldquo;too many requests&rdquo; errors:</b> when Yahoo Finance rate-limits, panels now retry briefly and back off together instead of flashing an error &mdash; they keep showing the last good data and recover on their own.</li>
+          <li><b>Opens in full screen:</b> findash now launches borderless, filling the screen. Toggle it with <b>Shift+F11</b> or under <b>Settings &#9656; Full Screen</b>.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Tue, 21 Jul 2026 15:00:00 -0300</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/findash/releases/download/v1.4.3/findash-setup.exe"
+        sparkle:version="1.4.3"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="72944648"
+        sparkle:edSignature="TL3FJd6lbNtBhz7WrffS64uCWySLPqaRzbIhNdVteE/LGmoLh1+UG6XRAHM9dGCY946w/yIUf0yl6/l4rlnJDA=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>findash 1.4.2</title>
       <description><![CDATA[
         <style>

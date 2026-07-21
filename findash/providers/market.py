@@ -21,6 +21,12 @@ import requests
 import yfinance as yf
 
 from ..datahub import DataHub, Provider
+from ._yf import (
+    RATE_LIMIT_GATE,
+    RATE_LIMIT_MESSAGE,
+    publish_fetch_error,
+    with_retry,
+)
 
 QUOTE_HTTP_TIMEOUT = 6.0
 
@@ -122,20 +128,27 @@ class MarketProvider(Provider):
         if not symbols:
             return
 
+        # Yahoo is throttling right now: skip the yfinance calls entirely and let
+        # panels keep their last-known quote rather than pile on more requests.
+        if RATE_LIMIT_GATE.blocked():
+            for sym in symbols:
+                hub.publish_error(f"quote:{sym}", RATE_LIMIT_MESSAGE)
+            return
+
         try:
             batch = yf.Tickers(" ".join(symbols))
         except Exception as exc:
             for sym in symbols:
-                hub.publish_error(f"quote:{sym}", f"quote fetch failed: {exc}")
+                publish_fetch_error(hub, f"quote:{sym}", "quote fetch failed", exc)
             return
 
         for sym in symbols:
             topic = f"quote:{sym}"
             try:
                 tkr = batch.tickers.get(sym) or yf.Ticker(sym)
-                hub.publish(topic, self._build_quote(sym, tkr))
+                hub.publish(topic, with_retry(lambda t=tkr, s=sym: self._build_quote(s, t)))
             except Exception as exc:
-                hub.publish_error(topic, f"quote fetch failed: {exc}")
+                publish_fetch_error(hub, topic, "quote fetch failed", exc)
 
     def _quote_from_finnhub(self, symbol: str) -> Optional[dict]:
         """Finnhub /quote (only when FINNHUB_API_KEY is set). Payload has no
@@ -282,6 +295,9 @@ class MarketProvider(Provider):
             hub.publish_error(topic, f"malformed history topic: {topic}")
             return
         _, symbol, period, interval = parts
+        if RATE_LIMIT_GATE.blocked():
+            hub.publish_error(topic, RATE_LIMIT_MESSAGE)
+            return
         try:
             tkr = yf.Ticker(symbol)
             if ".." in period:
@@ -289,11 +305,13 @@ class MarketProvider(Provider):
                 # yfinance's end param is exclusive, so push it one day out)
                 start_s, end_s = period.split("..", 1)
                 end_excl = date.fromisoformat(end_s) + timedelta(days=1)
-                df = tkr.history(
-                    start=start_s, end=end_excl.isoformat(), interval=interval
+                df = with_retry(
+                    lambda: tkr.history(
+                        start=start_s, end=end_excl.isoformat(), interval=interval
+                    )
                 )
             else:
-                df = tkr.history(period=period, interval=interval)
+                df = with_retry(lambda: tkr.history(period=period, interval=interval))
             if df is None or df.empty:
                 hub.publish_error(topic, f"no history data for {symbol}")
                 return
@@ -311,16 +329,19 @@ class MarketProvider(Provider):
             }
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"history fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "history fetch failed", exc)
 
     # -- analyst -----------------------------------------------------------
 
     def _fetch_analyst(self, symbol: str) -> None:
         hub = DataHub.instance()
         topic = f"analyst:{symbol}"
+        if RATE_LIMIT_GATE.blocked():
+            hub.publish_error(topic, RATE_LIMIT_MESSAGE)
+            return
         try:
             tkr = yf.Ticker(symbol)
-            info = tkr.info or {}
+            info = with_retry(lambda: tkr.info) or {}
             value: dict = {
                 "symbol": symbol,
                 "target_high": _as_float(info.get("targetHighPrice")),
@@ -355,16 +376,19 @@ class MarketProvider(Provider):
 
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"analyst fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "analyst fetch failed", exc)
 
     # -- profile -------------------------------------------------------------
 
     def _fetch_profile(self, symbol: str) -> None:
         hub = DataHub.instance()
         topic = f"profile:{symbol}"
+        if RATE_LIMIT_GATE.blocked():
+            hub.publish_error(topic, RATE_LIMIT_MESSAGE)
+            return
         try:
             tkr = yf.Ticker(symbol)
-            info = tkr.info or {}
+            info = with_retry(lambda: tkr.info) or {}
 
             officers: list[dict] = []
             raw_officers = info.get("companyOfficers")
@@ -402,4 +426,4 @@ class MarketProvider(Provider):
             }
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"profile fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "profile fetch failed", exc)

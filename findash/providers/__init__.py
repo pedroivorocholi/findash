@@ -4,6 +4,7 @@ DataHub singleton. Called once from ``__main__.py`` before panels load."""
 from __future__ import annotations
 
 from ..datahub import DataHub, TopicPolicy
+from . import _yf
 from .econ import EconProvider
 from .fundamentals import FundamentalsProvider
 from .market import MarketProvider
@@ -14,6 +15,10 @@ def register_all_providers() -> None:
     """Instantiate providers, register them, and set per-topic-pattern
     refresh policies."""
     hub = DataHub.instance()
+
+    # Enable yfinance's own retry for network blips; 429 backoff/cooldown is
+    # handled in the providers via the helpers in ``_yf``.
+    _yf.configure()
 
     hub.register_provider(MarketProvider())
     hub.register_provider(NewsProvider())

@@ -16,6 +16,12 @@ from typing import Any, Callable, Optional
 import yfinance as yf
 
 from ..datahub import DataHub, Provider
+from ._yf import (
+    RATE_LIMIT_GATE,
+    RATE_LIMIT_MESSAGE,
+    publish_fetch_error,
+    with_retry,
+)
 
 # Hard cap on any single fetch. yfinance property access can hang on a slow or
 # unresponsive endpoint; without a ceiling a hung call pins its QThreadPool
@@ -234,6 +240,11 @@ class FundamentalsProvider(Provider):
         at exit and would hang the app on close — the very hang this guards
         against). Fetch bodies publish their own success/error, so a late
         completion is a benign last-writer-wins on the topic."""
+        # Yahoo is throttling: skip the fetch and keep the last-known value
+        # rather than add to the pile-up that caused the throttle.
+        if RATE_LIMIT_GATE.blocked():
+            DataHub.instance().publish_error(topic, RATE_LIMIT_MESSAGE)
+            return
         done = threading.Event()
 
         def _run() -> None:
@@ -297,7 +308,7 @@ class FundamentalsProvider(Provider):
             }
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"financials fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "financials fetch failed", exc)
 
     # -- earnings --------------------------------------------------------
 
@@ -305,7 +316,7 @@ class FundamentalsProvider(Provider):
         hub = DataHub.instance()
         try:
             tkr = yf.Ticker(symbol)
-            df = tkr.earnings_dates
+            df = with_retry(lambda: tkr.earnings_dates)
             rows: list[list] = []
             next_date = None
 
@@ -335,7 +346,7 @@ class FundamentalsProvider(Provider):
             value = {"symbol": symbol, "next_date": next_date, "rows": rows}
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"earnings fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "earnings fetch failed", exc)
 
     # -- dividends -------------------------------------------------------
 
@@ -403,7 +414,7 @@ class FundamentalsProvider(Provider):
             }
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"dividends fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "dividends fetch failed", exc)
 
     # -- holders -----------------------------------------------------------
 
@@ -449,7 +460,7 @@ class FundamentalsProvider(Provider):
             }
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"holders fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "holders fetch failed", exc)
 
     # -- options -------------------------------------------------------------
 
@@ -498,7 +509,7 @@ class FundamentalsProvider(Provider):
         hub = DataHub.instance()
         try:
             tkr = yf.Ticker(symbol)
-            expiries = list(tkr.options or ())
+            expiries = list(with_retry(lambda: tkr.options) or ())
             if not expiries:
                 hub.publish_error(topic, f"no options for {symbol}")
                 return
@@ -517,7 +528,7 @@ class FundamentalsProvider(Provider):
                 except Exception:
                     spot = None
 
-            chain = tkr.option_chain(use_expiry)
+            chain = with_retry(lambda: tkr.option_chain(use_expiry))
             calls = self._nearest_rows(chain.calls, spot)
             puts = self._nearest_rows(chain.puts, spot)
 
@@ -531,7 +542,7 @@ class FundamentalsProvider(Provider):
             }
             hub.publish(topic, value)
         except Exception as exc:
-            hub.publish_error(topic, f"options fetch failed: {exc}")
+            publish_fetch_error(hub, topic, "options fetch failed", exc)
 
     # -- movers --------------------------------------------------------------
 
@@ -547,7 +558,7 @@ class FundamentalsProvider(Provider):
             screen_key = self._MOVERS_SCREENS.get(kind)
             if screen_key is None:
                 raise ValueError(f"unknown movers kind: {kind}")
-            result = yf.screen(screen_key)
+            result = with_retry(lambda: yf.screen(screen_key))
             quotes = (result or {}).get("quotes") or []
             rows = []
             for q in quotes[:25]:
@@ -564,4 +575,4 @@ class FundamentalsProvider(Provider):
                 )
             hub.publish(topic, rows)
         except Exception as exc:
-            hub.publish_error(topic, f"movers unavailable: {exc}")
+            publish_fetch_error(hub, topic, "movers unavailable", exc)

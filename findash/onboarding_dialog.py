@@ -65,6 +65,7 @@ _SHORTCUTS_HTML = _page_css() + f"""
   {_row(_kbd("F5"), "Refresh all live feeds (quotes, news, charts, financials)")}
   {_row(_kbd("F11"), "Maximize the focused panel — press again to restore")}
   {_row(_kbd("Esc"), "Restore a maximized panel")}
+  {_row(_kbd("Shift", "F11"), "Toggle borderless full screen (findash opens in full screen)")}
   {_row(_kbd("Ctrl", "W"), "Close the focused panel")}
   {_row(_kbd("Ctrl", "Shift", "T"), "Reopen the last panel you closed")}
   {_row(_kbd("F1"), "Open this Keyboard Shortcuts &amp; Guide window")}
