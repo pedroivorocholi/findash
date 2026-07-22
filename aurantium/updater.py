@@ -1,4 +1,4 @@
-"""Auto-update via WinSparkle (Windows only).
+"""Auto-update via WinSparkle (Windows) / a lightweight equivalent (macOS).
 
 WinSparkle checks an appcast feed, downloads the signed installer when a newer
 version exists, verifies its EdDSA signature against the public key embedded
@@ -9,6 +9,12 @@ disables itself and the app runs normally.
 There is no maintained Python binding, so this wraps ``WinSparkle.dll`` directly
 via ctypes. On 64-bit Windows there is a single calling convention, so plain
 ``CDLL`` is correct.
+
+macOS has no WinSparkle equivalent bundled here (real Sparkle.framework needs
+PyObjC + a signed bundle), so ``updater_mac.py`` implements the same
+appcast/EdDSA contract in pure Python. Every function below just dispatches to
+it on ``sys.platform == "darwin"`` — callers (``app.py``, ``__main__.py``)
+don't need to know which backend is active.
 
 Release/signing steps live in ``RELEASING.md``; key generation and signing
 helpers live in ``tools/``.
@@ -55,6 +61,10 @@ def _placeholder(value: str) -> bool:
 
 def available() -> bool:
     """True if the updater is configured and could run on this platform."""
+    if sys.platform == "darwin":
+        from . import updater_mac
+
+        return updater_mac.available()
     return (
         sys.platform == "win32"
         and not _placeholder(GITHUB_USER)
@@ -97,6 +107,10 @@ def init() -> bool:
     """Configure and start WinSparkle. Enables the daily silent check.
     Returns True if the updater is now active. Safe to call unconditionally —
     a no-op when unavailable."""
+    if sys.platform == "darwin":
+        from . import updater_mac
+
+        return updater_mac.init()
     if not available():
         return False
     lib = _load_dll()
@@ -128,6 +142,11 @@ def check_now() -> None:
     """Manual 'Check for Updates…' — shows the WinSparkle UI, including a
     'you're up to date' message when there's nothing new. No-op if unavailable
     (the menu item explains why via ``unavailable_reason``)."""
+    if sys.platform == "darwin":
+        from . import updater_mac
+
+        updater_mac.check_now()
+        return
     lib = _load_dll() if available() else None
     if lib is None:
         return
@@ -139,6 +158,11 @@ def check_now() -> None:
 
 def cleanup() -> None:
     """Shut WinSparkle down cleanly (joins its worker thread). Call on exit."""
+    if sys.platform == "darwin":
+        from . import updater_mac
+
+        updater_mac.cleanup()
+        return
     if _dll is None:
         return
     try:
@@ -149,8 +173,12 @@ def cleanup() -> None:
 
 def unavailable_reason() -> str:
     """Human-readable reason the updater is off, for the manual menu path."""
+    if sys.platform == "darwin":
+        from . import updater_mac
+
+        return updater_mac.unavailable_reason()
     if sys.platform != "win32":
-        return "Automatic updates are only available on Windows."
+        return "Automatic updates are only available on Windows or macOS."
     if _placeholder(GITHUB_USER):
         return "Updates aren't configured yet (no release feed set)."
     if not EDDSA_PUBLIC_KEY:

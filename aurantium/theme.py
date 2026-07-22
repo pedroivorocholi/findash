@@ -14,6 +14,8 @@ use on top of an ``ACCENT`` fill (black on amber in dark, white on amber in
 light), so accent chips/selections stay readable in both themes.
 """
 
+import sys
+
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
@@ -23,9 +25,21 @@ THEME_SETTINGS_KEY = "ui/theme"
 THEMES = ("dark", "light")
 DEFAULT_THEME = "dark"
 
-# Fonts: Segoe UI for chrome, Consolas for figures (theme-independent).
-UI_FONT = "Segoe UI"
-MONO_FONT = "Consolas"
+# Fonts: chrome font + figures font (theme-independent). Neither Windows font
+# exists on macOS — Qt would silently fall back to some default, breaking the
+# tabular-figure alignment the whole density-driven layout depends on — so
+# pick the platform's own equivalents instead. Menlo is macOS's traditional
+# terminal/dev monospace (bundled since 10.6, the same role Consolas plays on
+# Windows); Helvetica Neue is the pre-San-Francisco system sans, still bundled
+# and a closer visual match to Segoe UI's weight than trying to reference the
+# San Francisco family by name (not reliably resolvable via plain QSS
+# font-family strings across macOS versions).
+if sys.platform == "darwin":
+    UI_FONT = "Helvetica Neue"
+    MONO_FONT = "Menlo"
+else:
+    UI_FONT = "Segoe UI"
+    MONO_FONT = "Consolas"
 
 # -- palettes --------------------------------------------------------------
 # Dark is the original, byte-for-byte. Light is a clean paper variant that

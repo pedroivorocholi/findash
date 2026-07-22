@@ -77,10 +77,12 @@ def _splash_pixmap(base, dpr: float, text: str):
     from PySide6.QtCore import QRect, Qt
     from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 
+    from .theme import MONO_FONT
+
     pix = QPixmap(base)  # copy; physical-pixel coordinates
     p = QPainter(pix)
     p.fillRect(QRect(1, _SPLASH_TEXT_Y - 6, pix.width() - 2, 34), QColor("#000000"))
-    font = QFont("Consolas", 8)
+    font = QFont(MONO_FONT, 8)
     font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 115)
     p.setFont(font)
     p.setPen(QColor(_SPLASH_AMBER))

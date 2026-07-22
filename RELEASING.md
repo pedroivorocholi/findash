@@ -69,6 +69,11 @@ Download the latest WinSparkle release zip from
 > `EDDSA_PUBLIC_KEY` are set and the DLL is present — so a half-configured
 > build simply runs without updates instead of misbehaving.
 
+> **macOS needs none of this step.** There's no WinSparkle.dll equivalent to
+> download — `aurantium/updater_mac.py` is pure Python and reads the exact
+> same `GITHUB_USER` / `EDDSA_PUBLIC_KEY` set above. It just needs `<item>`s
+> in `appcast.xml` tagged `sparkle:os="macos"` — see the per-release checklist.
+
 ---
 
 ## Per-release checklist
@@ -136,11 +141,57 @@ Add a **new `<item>` at the top** (keep older ones for history):
   relaunch via the `[Run] … postinstall skipifsilent` entry (no delay needed;
   the Finished page already gives time). Don't add `/RESTARTAPPLICATIONS`.
 
+### 4b. macOS: add its own appcast item (skip if not shipping a Mac build)
+
+Build on an actual Mac (`BUILD.md` § 1b) — you can't cross-build. Then:
+
+```bash
+cd dist && zip -r aurantium-mac.zip aurantium.app && cd ..
+.venv/bin/python tools/sign_update.py dist/aurantium-mac.zip
+```
+
+`tools/sign_update.py` signs raw file bytes — it's not WinSparkle-specific, so
+the exact same script and the exact same `tools/eddsa_private.key` work for
+both platforms. `updater_mac.py` expects the zip's **top level** to contain
+`aurantium.app` (that's what `zip -r … aurantium.app` from inside `dist/`
+produces).
+
+Add a **second `<item>`** to `appcast.xml` (alongside, not replacing, the
+Windows one — `updater.py`/`updater_mac.py` each only look at the item whose
+`sparkle:os` matches their own platform):
+
+```xml
+<item>
+  <title>aurantium 1.1.0</title>
+  <description><![CDATA[ <ul><li>What changed…</li></ul> ]]></description>
+  <pubDate>Fri, 01 Aug 2026 12:00:00 +0000</pubDate>
+  <enclosure
+    url="https://github.com/your-username/aurantium/releases/download/v1.1.0/aurantium-mac.zip"
+    sparkle:version="1.1.0"
+    sparkle:os="macos"
+    length="PASTE_LENGTH"
+    sparkle:edSignature="PASTE_SIGNATURE"
+    type="application/zip" />
+</item>
+```
+
+No `sparkle:installerArguments` — there's no installer to run silently.
+`updater_mac.py` downloads the zip itself, re-verifies the signature
+independently (never trusts the appcast alone), extracts it, and swaps the
+running `.app` for the new one via a detached helper that only touches disk
+after the app has fully quit. Include the mac asset in the same GitHub
+release as the Windows one (next step) so one release, one `gh release
+create`, ships both.
+
 ### 5. Publish the GitHub release
 
 ```bash
-gh release create v1.1.0 dist/aurantium-setup.exe --title "aurantium 1.1.0" --notes "…"
+gh release create v1.1.0 dist/aurantium-setup.exe dist/aurantium-mac.zip \
+  --title "aurantium 1.1.0" --notes "…"
 ```
+
+(Drop `dist/aurantium-mac.zip` from the command if you're not shipping a Mac
+build this round.)
 
 ### 6. Push the updated appcast
 
@@ -166,5 +217,9 @@ verification error instead — fix the appcast and retry.)
   run.
 - **Never regenerate the key** unless you must; it breaks the update path for
   everyone on an older build (they can't verify the new key), forcing a manual
-  re-install.
-- **macOS** builds don't use WinSparkle; the updater is a no-op there.
+  re-install — on **both** platforms, since Windows and macOS share one key
+  pair and one `appcast.xml`.
+- **macOS** doesn't use WinSparkle — see `updater_mac.py` and step 4b above.
+  Its swap-and-relaunch has only been reasoned through, not run on real
+  hardware yet; the first macOS release is also the first real test of it.
+  Verify it end-to-end (step 7, on a Mac) before trusting it for others.

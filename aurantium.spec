@@ -71,6 +71,11 @@ hiddenimports += [
     "aurantium.undo",
 ]
 
+# macOS-only updater backend (see updater.py's docstring); imported lazily
+# from updater.py so it never loads on Windows, but must be bundled for it.
+if IS_MAC:
+    hiddenimports += ["aurantium.updater_mac"]
+
 # yfinance / news deps that static analysis under-collects.
 hiddenimports += [
     "multitasking", "frozendict", "peewee", "platformdirs",

@@ -2,4 +2,5 @@
 -r requirements.txt
 pyinstaller>=6.0
 pillow>=10.0  # only used to (re)generate aurantium.icns for the macOS build
-cryptography>=42.0  # Ed25519 signing for WinSparkle updates (tools/)
+# cryptography is in requirements.txt (needed at runtime by updater_mac.py);
+# tools/sign_update.py and tools/gen_keys.py reuse that same install.
