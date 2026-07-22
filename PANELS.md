@@ -1,6 +1,6 @@
-# PANELS.md — customize your own aurantium
+# PANELS.md — customize your own Aurantium
 
-aurantium is a personal, Bloomberg-style market dashboard designed to be forked
+Aurantium is a personal, Bloomberg-style market dashboard designed to be forked
 and customized **without touching core code**. This file is the complete guide.
 
 ## Get your own copy running

@@ -10,7 +10,14 @@ from pathlib import Path
 import PySide6QtAds as QtAds
 from PySide6.QtCore import Qt, QSettings
 from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPropertyAnimation
-from PySide6.QtGui import QAction, QActionGroup, QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
+    QIcon,
+    QKeySequence,
+    QPixmap,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -47,7 +54,7 @@ CURRENT_LAYOUT_VERSION = 1
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("aurantium — personal terminal")
+        self.setWindowTitle("Aurantium — personal terminal")
         self.resize(1500, 900)
         self._instance_seq: dict[str, int] = {}
         self._docks: dict[str, QtAds.CDockWidget] = {}  # instance_id -> dock
@@ -120,6 +127,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "Click any ticker — every linked panel follows. Data: Yahoo Finance/Google News (free, delayed)."
         )
+        # Bottom bar removed to give the taller top bar (logo) room without
+        # growing the window — showMessage() calls above are harmless no-ops.
+        self.statusBar().setVisible(False)
 
     # -- full screen (maximize one panel in the window) ----------------------
 
@@ -230,7 +240,7 @@ class MainWindow(QMainWindow):
                 self.style().StandardPixmap.SP_ComputerIcon
             )
         self._tray = QSystemTrayIcon(icon, self)
-        self._tray.setToolTip("aurantium")
+        self._tray.setToolTip("Aurantium")
 
         menu = QMenu()
         menu.addAction("Show").triggered.connect(self._show_from_tray)
@@ -244,7 +254,7 @@ class MainWindow(QMainWindow):
         # shared setter keeps this in sync with the Settings-menu toggle
         self._close_to_tray_act.toggled.connect(self._set_close_to_tray)
         menu.addSeparator()
-        menu.addAction("Quit aurantium").triggered.connect(self._quit_app)
+        menu.addAction("Quit Aurantium").triggered.connect(self._quit_app)
         self._tray_menu = menu  # keep a reference
         self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_tray_activated)
@@ -309,7 +319,7 @@ class MainWindow(QMainWindow):
     def _on_alert_triggered(self, message: str) -> None:
         if self._tray is not None:
             self._tray.showMessage(
-                "aurantium — price alert", message,
+                "Aurantium — price alert", message,
                 QSystemTrayIcon.MessageIcon.Information, 8000,
             )
         self.statusBar().showMessage(f"⚠ Alert: {message}", 8000)
@@ -548,17 +558,58 @@ class MainWindow(QMainWindow):
     # -- chrome ----------------------------------------------------------------
 
     def _wrap_menu_and_bar(self, bar: QWidget) -> QWidget:
-        """Stack the menu bar and the symbol command bar."""
+        """Stack the menu row (logo + menu bar) and the symbol command bar."""
         from PySide6.QtWidgets import QMenuBar, QVBoxLayout
 
         holder = QWidget(self)
         vl = QVBoxLayout(holder)
         vl.setContentsMargins(0, 0, 0, 0)
         vl.setSpacing(0)
-        self._menubar = QMenuBar(holder)
-        vl.addWidget(self._menubar)
+
+        menu_row = QWidget(holder)
+        menu_row.setObjectName("menuBarRow")
+        self._menu_row_layout = QHBoxLayout(menu_row)
+        self._menu_row_layout.setContentsMargins(0, 0, 0, 0)
+        self._menu_row_layout.setSpacing(0)
+        self._menubar = QMenuBar(menu_row)
+        self._menu_row_layout.addWidget(self._menubar, 1)
+        vl.addWidget(menu_row)
+
         vl.addWidget(bar)
         return holder
+
+    def _build_logo_label(self, parent: QWidget, max_height: int) -> QLabel | None:
+        """Wordmark right before the Panels menu, sized to fill ``max_height``
+        (the menu bar's own height) with a little breathing room — never
+        taller, so it can't grow the row. Themes never hot-swap (switching
+        restarts the app — see ``_on_theme_selected``), so picking the
+        light/dark asset once here is safe."""
+        from .theme import current_theme
+
+        name = (
+            "aurantium_logo_ondark.png"
+            if current_theme() == "dark"
+            else "aurantium_logo.png"
+        )
+        logo_path = BUNDLE_DIR / name
+        if not logo_path.is_file():
+            return None
+        pixmap = QPixmap(str(logo_path))
+        if pixmap.isNull():
+            return None
+        # Scale in physical pixels and tag the result with the screen's device
+        # pixel ratio — scaling to N logical px directly renders blurry on any
+        # HiDPI display, since Qt then upsamples an already-tiny bitmap.
+        dpr = QApplication.primaryScreen().devicePixelRatio() if QApplication.primaryScreen() else 1.0
+        target_h_logical = max(1, max_height - 2)
+        scaled = pixmap.scaledToHeight(
+            round(target_h_logical * dpr), Qt.TransformationMode.SmoothTransformation
+        )
+        scaled.setDevicePixelRatio(dpr)
+        label = QLabel(parent)
+        label.setObjectName("menuBarLogo")
+        label.setPixmap(scaled)
+        return label
 
     def _build_menus(self) -> None:
         # Panels is the one primary top-level menu; everything else (theme,
@@ -567,6 +618,19 @@ class MainWindow(QMainWindow):
         self._rebuild_panels_menu()
 
         self._build_settings_menu()
+
+        # QSS-derived sizing isn't resolved until the widget is polished — an
+        # unpolished QMenuBar under-reports its height (measured 31px instead
+        # of the true 45px), which would clamp the logo far smaller than the
+        # real ceiling. ensurePolished() forces that resolution synchronously,
+        # so this is accurate immediately with no dependence on event-loop
+        # timing (a deferred QTimer.singleShot(0, ...) measured right in one
+        # test but isn't guaranteed to on a different system).
+        self._menubar.ensurePolished()
+        bar_height = self._menubar.sizeHint().height()
+        logo = self._build_logo_label(self._menubar.parentWidget(), bar_height)
+        if logo is not None:
+            self._menu_row_layout.insertWidget(0, logo)
 
     def _build_settings_menu(self) -> None:
         """The consolidated Settings menu — appearance, accessibility, layouts,
@@ -606,7 +670,7 @@ class MainWindow(QMainWindow):
         a_tray.setChecked(QSettings().value("tray/close_to_tray", False, type=bool))
         a_tray.setEnabled(QSystemTrayIcon.isSystemTrayAvailable())
         a_tray.setToolTip(
-            "Keep aurantium running in the system tray when the window is closed"
+            "Keep Aurantium running in the system tray when the window is closed"
         )
         a_tray.toggled.connect(self._set_close_to_tray)
         self._settings_tray_act = a_tray
@@ -642,7 +706,7 @@ class MainWindow(QMainWindow):
         a_update = QAction("Check for Updates…", self)
         a_update.triggered.connect(self._check_for_updates)
         m.addAction(a_update)
-        a_about = QAction("About aurantium", self)
+        a_about = QAction("About Aurantium", self)
         a_about.triggered.connect(self._show_about)
         m.addAction(a_about)
 
@@ -665,7 +729,7 @@ class MainWindow(QMainWindow):
         resp = QMessageBox.question(
             self,
             "Color-blind mode",
-            f"{'Enable' if on else 'Disable'} color-blind mode?\n\naurantium needs "
+            f"{'Enable' if on else 'Disable'} color-blind mode?\n\nAurantium needs "
             "to restart to apply it — your workspace will be restored "
             "automatically.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -718,7 +782,7 @@ class MainWindow(QMainWindow):
         box.setWindowTitle("Connect free data sources")
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setText(
-            "<b>aurantium works out of the box</b> — quotes, charts, and news "
+            "<b>Aurantium works out of the box</b> — quotes, charts, and news "
             "run on free keyless sources.<br><br>"
             "Connecting <b>free API keys</b> unlocks better sources:"
             "<ul>"
@@ -764,8 +828,8 @@ class MainWindow(QMainWindow):
 
         QMessageBox.about(
             self,
-            "About aurantium",
-            f"<b>aurantium</b> — personal market terminal<br>"
+            "About Aurantium",
+            f"<b>Aurantium</b> — personal market terminal<br>"
             f"Version {__version__}<br><br>"
             "Data: Yahoo Finance / Google News (free, delayed).",
         )
@@ -883,7 +947,7 @@ class MainWindow(QMainWindow):
         resp = QMessageBox.question(
             self,
             "Switch theme",
-            f"Switch to the {name} theme?\n\naurantium needs to restart to apply "
+            f"Switch to the {name} theme?\n\nAurantium needs to restart to apply "
             "it — your workspace will be restored automatically.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -1102,7 +1166,7 @@ class MainWindow(QMainWindow):
             layout_version = 1  # malformed version — treat as current, try to load
         if layout_version > CURRENT_LAYOUT_VERSION:
             self.statusBar().showMessage(
-                "This layout was saved by a newer version of aurantium — "
+                "This layout was saved by a newer version of Aurantium — "
                 "update to load it.",
                 6000,
             )
@@ -1151,7 +1215,7 @@ class MainWindow(QMainWindow):
             self,
             "Export layout",
             f"{name}{LAYOUT_EXT}",
-            f"aurantium layout (*{LAYOUT_EXT});;JSON (*.json)",
+            f"Aurantium layout (*{LAYOUT_EXT});;JSON (*.json)",
         )
         if not fn:
             return
@@ -1168,7 +1232,7 @@ class MainWindow(QMainWindow):
             self,
             "Import layout",
             "",
-            f"aurantium layout (*{LAYOUT_EXT} *.json);;All files (*)",
+            f"Aurantium layout (*{LAYOUT_EXT} *.json);;All files (*)",
         )
         if not fn:
             return
@@ -1184,7 +1248,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Import layout",
-                f"{path.name} isn't a valid aurantium layout file.",
+                f"{path.name} isn't a valid Aurantium layout file.",
             )
             return
         name = str(doc.get("name") or path.stem).strip() or "Imported Layout"
@@ -1225,7 +1289,7 @@ class MainWindow(QMainWindow):
             self.hide()
             if self._tray is not None:
                 self._tray.showMessage(
-                    "aurantium",
+                    "Aurantium",
                     "Still running in the tray — right-click the icon to quit.",
                     QSystemTrayIcon.MessageIcon.Information, 4000,
                 )

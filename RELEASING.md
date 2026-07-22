@@ -1,6 +1,6 @@
-# Releasing aurantium (with WinSparkle auto-updates)
+# Releasing Aurantium (with WinSparkle auto-updates)
 
-aurantium ships updates through [WinSparkle](https://winsparkle.org/). On launch
+Aurantium ships updates through [WinSparkle](https://winsparkle.org/). On launch
 the app checks an **appcast** feed once a day; when a newer, correctly-signed
 installer is available it offers to download and run it. Users click once — no
 manual re-install.
@@ -124,7 +124,7 @@ Add a **new `<item>` at the top** (keep older ones for history):
 - `pubDate` in RFC-822 (e.g. `date -R`).
 - **`sparkle:installerArguments` is required** — it makes WinSparkle run the
   Inno installer silently instead of showing the full setup wizard. `/VERYSILENT`
-  hides the UI; `/FORCECLOSEAPPLICATIONS` closes a running aurantium so its files
+  hides the UI; `/FORCECLOSEAPPLICATIONS` closes a running Aurantium so its files
   can be replaced. Omit it and every update pops the full wizard.
 - **Relaunch** is handled by the installer, not the appcast (WinSparkle does not
   relaunch the app itself, and `/RESTARTAPPLICATIONS` is unreliable). Silent
@@ -152,7 +152,7 @@ git push
 
 ### 7. Verify
 
-On a machine running the **previous** version, launch aurantium and pick
+On a machine running the **previous** version, launch Aurantium and pick
 **Help ▸ Check for Updates…**. It should find 1.1.0, verify the signature, and
 offer to install. (A signature/URL/length mismatch shows a download or
 verification error instead — fix the appcast and retry.)

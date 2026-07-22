@@ -1,4 +1,6 @@
-# aurantium
+![Aurantium](aurantium_logo.png)
+
+# Aurantium
 
 A personal, Bloomberg-style market terminal for your desktop — free data,
 linked panels, and a plugin model that lets anyone fork it and build their

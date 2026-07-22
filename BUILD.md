@@ -1,4 +1,4 @@
-# Building aurantium as a standalone app
+# Building Aurantium as a standalone app
 
 The goal: a standalone app you can hand to anyone — no Python, no venv, no install
 steps. Builds on **Windows** (`aurantium.exe`) and **macOS** (`aurantium.app`) from the
@@ -51,7 +51,7 @@ Notes (both platforms):
 
 ## 2. Windows installer (optional, nicer to distribute)
 
-Produces a `Setup.exe` that installs aurantium, adds Start-Menu and desktop
+Produces a `Setup.exe` that installs Aurantium, adds Start-Menu and desktop
 shortcuts (with the correct icon + taskbar identity), and registers an
 uninstaller.
 

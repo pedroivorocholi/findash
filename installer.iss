@@ -11,12 +11,12 @@
 ; same install dir) instead of a fresh side-by-side "aurantium" install. Do not change
 ; this even though everything else has been renamed.
 AppId=findash
-AppName=aurantium
-AppVersion=1.4.4
-AppPublisher=aurantium
-DefaultDirName={autopf}\aurantium
-DefaultGroupName=aurantium
-; Force the Start Menu group to actually rename to "aurantium" on upgrade too —
+AppName=Aurantium
+AppVersion=1.4.5
+AppPublisher=Aurantium
+DefaultDirName={autopf}\Aurantium
+DefaultGroupName=Aurantium
+; Force the Start Menu group to actually rename to "Aurantium" on upgrade too —
 ; otherwise Inno would silently keep reusing the previous install's "findash" group.
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
@@ -57,15 +57,15 @@ Type: dirifempty; Name: "{commonprograms}\findash"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Icons]
-Name: "{group}\aurantium"; Filename: "{app}\aurantium.exe"; IconFilename: "{app}\aurantium.ico"; AppUserModelID: "{#AppId}"
-Name: "{group}\Uninstall aurantium"; Filename: "{uninstallexe}"
-Name: "{userdesktop}\aurantium"; Filename: "{app}\aurantium.exe"; IconFilename: "{app}\aurantium.ico"; AppUserModelID: "{#AppId}"; Tasks: desktopicon
+Name: "{group}\Aurantium"; Filename: "{app}\aurantium.exe"; IconFilename: "{app}\aurantium.ico"; AppUserModelID: "{#AppId}"
+Name: "{group}\Uninstall Aurantium"; Filename: "{uninstallexe}"
+Name: "{userdesktop}\Aurantium"; Filename: "{app}\aurantium.exe"; IconFilename: "{app}\aurantium.ico"; AppUserModelID: "{#AppId}"; Tasks: desktopicon
 
 [Run]
 ; Interactive installs relaunch via this postinstall entry (skipped in silent).
 ; By the time the user reaches the Finished page the new files have settled, so
 ; a plain launch works. Silent auto-updates relaunch from [Code] with a delay.
-Filename: "{app}\aurantium.exe"; WorkingDir: "{app}"; Description: "Launch aurantium"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\aurantium.exe"; WorkingDir: "{app}"; Description: "Launch Aurantium"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

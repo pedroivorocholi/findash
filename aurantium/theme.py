@@ -186,12 +186,23 @@ QLabel#panelStatus {{
 }}
 
 /* -- app top bar: steel-blue like the Launchpad title bar ---------------- */
-QMenuBar {{
-    background: {p['CHROME']}; color: {p['CHROME_TEXT']};
-    border-bottom: 1px solid {p['CHROME_BORDER']}; padding: 0px 4px;
+/* Taller than a stock menu bar — it has to fit the wordmark logo, which sits
+   in QWidget#menuBarRow beside the QMenuBar (a widget added as a QWidgetAction
+   isn't reliably shown by QMenuBar, so the logo is a plain layout sibling
+   instead). The removed bottom status bar (see MainWindow.__init__) gives
+   back the height this costs. */
+QWidget#menuBarRow {{
+    background: {p['CHROME']}; border-bottom: 1px solid {p['CHROME_BORDER']};
 }}
-QMenuBar::item {{ padding: 3px 9px; border-radius: 2px; color: {p['CHROME_TEXT_DIM']}; }}
+QMenuBar {{
+    background: {p['CHROME']}; color: {p['CHROME_TEXT']}; padding: 3px 8px 3px 2px;
+}}
+QMenuBar::item {{ padding: 5px 10px; border-radius: 2px; color: {p['CHROME_TEXT_DIM']}; }}
 QMenuBar::item:selected {{ background: {p['CHROME_HOVER']}; color: {p['CHROME_TEXT']}; }}
+/* The blanket QWidget rule above paints every plain widget BG (true black),
+   which is visibly darker than CHROME — override it so the logo's transparent
+   PNG shows the same chrome grey as the rest of the row, not a black box. */
+QLabel#menuBarLogo {{ background: transparent; padding: 0px 0px 0px 14px; }}
 
 QWidget#commandBar {{ background: {p['BG']}; border-bottom: 1px solid {p['BORDER']}; }}
 QLabel#commandLabel {{

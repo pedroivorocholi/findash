@@ -24,7 +24,12 @@ if not os.path.exists(_ICON):
     _ICON = None
 
 datas = [("layouts", "layouts"), (".env.example", ".")]
-for _asset in ("aurantium.ico", "aurantium.icns"):
+for _asset in (
+    "aurantium.ico",
+    "aurantium.icns",
+    "aurantium_logo.png",
+    "aurantium_logo_ondark.png",
+):
     if os.path.exists(_asset):
         datas.append((_asset, "."))
 binaries = []

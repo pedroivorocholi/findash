@@ -106,7 +106,7 @@ def init() -> bool:
         lib.win_sparkle_set_appcast_url(APPCAST_URL.encode("utf-8"))
         lib.win_sparkle_set_registry_path(_REGISTRY_PATH.encode("utf-8"))
         lib.win_sparkle_set_eddsa_public_key(EDDSA_PUBLIC_KEY.encode("utf-8"))
-        lib.win_sparkle_set_app_details("aurantium", "aurantium", __version__)
+        lib.win_sparkle_set_app_details("Aurantium", "Aurantium", __version__)
         lib.win_sparkle_set_update_check_interval(_CHECK_INTERVAL_SECONDS)
         # Enable automatic checks. On first run WinSparkle asks the user for
         # permission before the first silent check.
