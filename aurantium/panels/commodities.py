@@ -29,20 +29,34 @@ from ..panel import Panel, register_panel
 from ..undo import UndoStack
 from ..theme import ACCENT, BG_HEADER, FG_DIM, apply_tick
 
-DEFAULT_ENERGY = [
-    ["WTI", "CL=F"],
-    ["Brent", "BZ=F"],
-    ["Gasoline", "RB=F"],
-    ["Heating Oil", "HO=F"],
-    ["NatGas", "NG=F"],
+#: display groups in table order — keys are the settings keys, titles match
+#: the catalog categories so a picked commodity files into the right group
+GROUP_KEYS = [
+    ("energy", "Energy"),
+    ("metals", "Metals"),
+    ("agriculture", "Agriculture"),
+    ("livestock", "Livestock"),
 ]
-DEFAULT_METALS = [
-    ["Gold", "GC=F"],
-    ["Silver", "SI=F"],
-    ["Copper", "HG=F"],
-    ["Platinum", "PL=F"],
-    ["Aluminum", "ALI=F"],
-]
+
+DEFAULT_GROUPS = {
+    "energy": [
+        ["WTI", "CL=F"],
+        ["Brent", "BZ=F"],
+        ["Gasoline", "RB=F"],
+        ["Heating Oil", "HO=F"],
+        ["NatGas", "NG=F"],
+    ],
+    "metals": [
+        ["Gold", "GC=F"],
+        ["Silver", "SI=F"],
+        ["Copper", "HG=F"],
+        ["Platinum", "PL=F"],
+        ["Aluminum", "ALI=F"],
+    ],
+    # empty by default — the groups appear as soon as rows are added
+    "agriculture": [],
+    "livestock": [],
+}
 
 COL_NAME, COL_LAST, COL_CHG, COL_CHGPCT, COL_RANGE = range(5)
 HEADERS = ["Commodity", "Last", "Chg", "Chg%", "Range (1D)"]
@@ -69,8 +83,9 @@ def _fmt_range(low: Any, high: Any) -> str:
 @register_panel(id="commodities", title="Commodities", category="Markets")
 class CommoditiesPanel(Panel):
     def build(self) -> None:
-        self._energy: list = [list(row) for row in DEFAULT_ENERGY]
-        self._metals: list = [list(row) for row in DEFAULT_METALS]
+        self._groups: dict[str, list] = {
+            key: [list(row) for row in DEFAULT_GROUPS[key]] for key, _t in GROUP_KEYS
+        }
         # row -> ("header", None) | ("data", symbol)
         self._row_kind: dict[int, tuple[str, str | None]] = {}
         self._row_of_symbol: dict[str, int] = {}
@@ -108,19 +123,20 @@ class CommoditiesPanel(Panel):
         self._row_kind.clear()
         self._row_of_symbol.clear()
 
-        self._append_group_header("Energy")
-        for label, sym in self._energy:
-            self._append_data_row(label, sym)
-
-        self._append_group_header("Metals")
-        for label, sym in self._metals:
-            self._append_data_row(label, sym)
+        for key, title in GROUP_KEYS:
+            rows = self._groups[key]
+            if not rows:
+                continue  # empty groups don't render a lonely header
+            self._append_group_header(title)
+            for label, sym in rows:
+                self._append_data_row(label, sym)
 
         if hasattr(self, "_filter"):
             self.table.apply_filter(self._filter.text())
 
-        for _label, sym in self._energy + self._metals:
-            self.subscribe(f"quote:{sym}", lambda data, s=sym: self._on_quote(s, data))
+        for key, _title in GROUP_KEYS:
+            for _label, sym in self._groups[key]:
+                self.subscribe(f"quote:{sym}", lambda data, s=sym: self._on_quote(s, data))
 
     def _append_group_header(self, text: str) -> None:
         row = self.table.rowCount()
@@ -197,124 +213,130 @@ class CommoditiesPanel(Panel):
 
     # -- edit dialog ---------------------------------------------------------
 
-    def _apply_edit(self, energy=None, metals=None) -> None:
-        """Apply a config change (None = keep) behind one undo snapshot —
-        shared by the Edit dialog and the right-click quick actions."""
-        snap_e = [list(r) for r in self._energy]
-        snap_m = [list(r) for r in self._metals]
+    def _apply_edit(self, changes: dict[str, list]) -> None:
+        """Apply per-group config changes (missing key = keep) behind one
+        undo snapshot — shared by the Edit dialog and the right-click quick
+        actions."""
+        snap = {key: [list(r) for r in rows] for key, rows in self._groups.items()}
 
         def _undo() -> None:
-            self._energy = [list(r) for r in snap_e]
-            self._metals = [list(r) for r in snap_m]
+            self._groups = {key: [list(r) for r in rows] for key, rows in snap.items()}
             self._rebuild_table()
             self.set_status("undo · edit commodities")
 
         UndoStack.instance().push("edit commodities", _undo)
-        if energy is not None:
-            self._energy = energy
-        if metals is not None:
-            self._metals = metals
+        for key, rows in changes.items():
+            if key in self._groups:
+                self._groups[key] = rows
         self._rebuild_table()
+
+    _GROUP_BLURB = {
+        "energy": "Live futures quotes in the Energy group (CL=F, BZ=F…).",
+        "metals": "Live futures quotes in the Metals group (GC=F, SI=F…).",
+        "agriculture": "Live futures quotes in the Agriculture group — grains "
+        "and softs (ZC=F, KC=F…).",
+        "livestock": "Live futures quotes in the Livestock group (LE=F, HE=F…). "
+        "Any Yahoo Finance symbol works in every group.",
+    }
+    _GROUP_PRESETS = {
+        "energy": [("Oil complex", [["WTI", "CL=F"], ["Brent", "BZ=F"]])],
+        "metals": [("Precious", [["Gold", "GC=F"], ["Silver", "SI=F"]])],
+        "agriculture": [
+            ("Grains", [["Corn", "ZC=F"], ["Wheat (SRW)", "ZW=F"], ["Soybeans", "ZS=F"]]),
+            ("Softs", [["Coffee", "KC=F"], ["Sugar", "SB=F"], ["Cocoa", "CC=F"]]),
+        ],
+        "livestock": [
+            ("All livestock", [["Live Cattle", "LE=F"], ["Feeder Cattle", "GF=F"], ["Lean Hogs", "HE=F"]]),
+        ],
+    }
 
     def _open_edit_dialog(self) -> None:
         columns = [EditorColumn("Label"), EditorColumn("Symbol", kind="symbol")]
-        catalog = commodity_entries()
         result = open_list_editor(
             self,
             "Edit Commodities",
             [
                 EditorSection(
-                    "energy",
-                    "Energy",
+                    key,
+                    title,
                     columns,
-                    self._energy,
-                    description="Live futures quotes in the Energy group — any "
-                    "Yahoo Finance symbol works (CL=F, BZ=F…).",
-                    catalog=catalog,
-                    presets=[
-                        ("Oil complex", [["WTI", "CL=F"], ["Brent", "BZ=F"]]),
-                    ],
-                ),
-                EditorSection(
-                    "metals",
-                    "Metals",
-                    columns,
-                    self._metals,
-                    description="Live futures quotes in the Metals group — any "
-                    "Yahoo Finance symbol works (GC=F, SI=F…).",
-                    catalog=catalog,
-                    presets=[
-                        ("Precious", [["Gold", "GC=F"], ["Silver", "SI=F"]]),
-                    ],
-                ),
+                    self._groups[key],
+                    description=self._GROUP_BLURB[key],
+                    # tab-specific slice first, everything else still findable
+                    catalog=sorted(
+                        commodity_entries(), key=lambda e: e.category != title
+                    ),
+                    presets=self._GROUP_PRESETS[key],
+                )
+                for key, title in GROUP_KEYS
             ],
         )
         if result is None:
             return
-        energy, metals = result["energy"], result["metals"]
-        if energy or metals:
-            self._apply_edit(energy or None, metals or None)
+        if any(result.get(key) for key, _t in GROUP_KEYS):
+            self._apply_edit({key: result[key] for key, _t in GROUP_KEYS})
+
+    def _group_of_symbol(self, symbol: str) -> str | None:
+        for key, _title in GROUP_KEYS:
+            if any(s == symbol for _l, s in self._groups[key]):
+                return key
+        return None
 
     def _row_actions(self, row: int) -> list:
         actions = []
         kind, symbol = self._row_kind.get(row, (None, None))
-        if kind == ROW_KIND_DATA and symbol:
-            in_energy = any(s == symbol for _l, s in self._energy)
-            group = self._energy if in_energy else self._metals
-            label = next((l for l, s in group if s == symbol), symbol)
+        hovered_key = self._group_of_symbol(symbol) if symbol else None
+        if kind == ROW_KIND_DATA and symbol and hovered_key:
+            rows = self._groups[hovered_key]
+            label = next((l for l, s in rows if s == symbol), symbol)
 
             def _remove() -> None:
-                rows = [list(r) for r in group if r[1] != symbol]
-                if in_energy:
-                    self._apply_edit(energy=rows)
-                else:
-                    self._apply_edit(metals=rows)
+                remaining = [list(r) for r in self._groups[hovered_key] if r[1] != symbol]
+                self._apply_edit({hovered_key: remaining})
 
             actions.append((f'Remove "{label}"', _remove))
 
-        def _add(to_energy: bool) -> None:
-            entry = open_add_picker(
-                self,
-                commodity_entries(),
-                title="Add to Energy" if to_energy else "Add to Metals",
-            )
+        def _add() -> None:
+            entry = open_add_picker(self, commodity_entries(), title="Add Commodity")
             if entry is None:
                 return
-            new_row = [entry.label, entry.code]
-            if to_energy:
-                self._apply_edit(energy=[list(r) for r in self._energy] + [new_row])
-            else:
-                self._apply_edit(metals=[list(r) for r in self._metals] + [new_row])
+            # file the pick into the group matching its catalog category;
+            # free-text symbols land in the group that was right-clicked
+            # (or Energy when the click wasn't on a row)
+            by_category = {title: key for key, title in GROUP_KEYS}
+            key = by_category.get(entry.category) or hovered_key or "energy"
+            self._apply_edit(
+                {key: [list(r) for r in self._groups[key]] + [[entry.label, entry.code]]}
+            )
 
-        actions.append(("Add to Energy…", lambda: _add(True)))
-        actions.append(("Add to Metals…", lambda: _add(False)))
+        actions.append(("Add commodity…", _add))
         actions.append(("Edit panel…", self._open_edit_dialog))
         return actions
 
     # -- persistence -------------------------------------------------------------
 
     def settings(self) -> dict:
-        return {
-            "energy": [list(r) for r in self._energy],
-            "metals": [list(r) for r in self._metals],
-            "hidden_cols": self.table.hidden_columns(),
-        }
+        out = {key: [list(r) for r in self._groups[key]] for key, _t in GROUP_KEYS}
+        out["hidden_cols"] = self.table.hidden_columns()
+        return out
 
     def restore(self, settings: dict) -> None:
         if not isinstance(settings, dict):
             return
-        energy = settings.get("energy")
-        metals = settings.get("metals")
         changed = False
-        if isinstance(energy, list) and energy:
-            cleaned = [[str(r[0]), str(r[1]).upper()] for r in energy if isinstance(r, list) and len(r) == 2]
-            if cleaned:
-                self._energy = cleaned
-                changed = True
-        if isinstance(metals, list) and metals:
-            cleaned = [[str(r[0]), str(r[1]).upper()] for r in metals if isinstance(r, list) and len(r) == 2]
-            if cleaned:
-                self._metals = cleaned
+        for key, _title in GROUP_KEYS:
+            rows = settings.get(key)
+            if not isinstance(rows, list):
+                continue
+            cleaned = [
+                [str(r[0]), str(r[1]).upper()]
+                for r in rows
+                if isinstance(r, list) and len(r) == 2
+            ]
+            # legacy layouts stored only energy/metals and never empty lists;
+            # an explicit empty list from a newer layout is honored
+            if cleaned or rows == []:
+                self._groups[key] = cleaned
                 changed = True
         if changed:
             self._rebuild_table()
