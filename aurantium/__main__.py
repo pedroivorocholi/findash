@@ -61,6 +61,100 @@ def _surface_on_second_instance(server, win) -> None:
         win.bring_to_front()
 
 
+# Splash card: aurantium_splash.png (640x360, logo + LOADING line + border) is
+# both the bootloader splash image and the Qt card's bitmap, shown 1:1 at
+# PHYSICAL pixel size — the exe manifest declares per-monitor DPI awareness
+# (see aurantium.spec), so neither window is ever re-scaled by Windows and the
+# Tk→Qt handoff is pixel-identical. The status line is repainted on a copy of
+# the bitmap in physical coordinates, matching the baked text exactly.
+_SPLASH_TEXT_Y = 262  # top of the status-line rect (physical px, under logo)
+_SPLASH_AMBER = "#c8842a"  # theme ACCENT_DEEP
+
+
+def _splash_pixmap(base, dpr: float, text: str):
+    """The card bitmap with the status line reading ``text``: erase the band
+    under the logo, redraw the message the same way make_splash baked it."""
+    from PySide6.QtCore import QRect, Qt
+    from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+
+    pix = QPixmap(base)  # copy; physical-pixel coordinates
+    p = QPainter(pix)
+    p.fillRect(QRect(1, _SPLASH_TEXT_Y - 6, pix.width() - 2, 34), QColor("#000000"))
+    font = QFont("Consolas", 8)
+    font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 115)
+    p.setFont(font)
+    p.setPen(QColor(_SPLASH_AMBER))
+    p.drawText(
+        QRect(0, _SPLASH_TEXT_Y, pix.width(), 24),
+        Qt.AlignmentFlag.AlignHCenter,
+        text,
+    )
+    p.end()
+    # Physical-size bitmap + screen DPR = shown 1:1, no scaling anywhere.
+    pix.setDevicePixelRatio(dpr)
+    return pix
+
+
+def _show_splash(app):
+    """Show the logo card while providers/panels/window build.
+
+    In a frozen build the bootloader's Tk splash is already up; this puts the
+    identical Qt card directly over it and then retires it — the swap is
+    invisible because the manifest-declared DPI awareness keeps both windows
+    at the same unscaled geometry. Dev runs simply start here. Returns the
+    splash (or None without the image); update its status line with
+    :func:`_splash_message`."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import QSplashScreen
+
+    base = QPixmap(str(BUNDLE_DIR / "aurantium_splash.png"))
+    if base.isNull():
+        return None
+    screen = app.primaryScreen()
+    dpr = screen.devicePixelRatio() if screen is not None else 1.0
+
+    # Stay-on-top is load-bearing: without it the splash can open BEHIND the
+    # foreground app (Windows only grants activation to the focused process
+    # tree), leaving the load looking like a blank gap.
+    splash = QSplashScreen(
+        _splash_pixmap(base, dpr, "LOADING"), Qt.WindowType.WindowStaysOnTopHint
+    )
+    splash._aurantium_base = base  # for _splash_message repaints
+    splash._aurantium_dpr = dpr
+    splash.show()
+    splash.raise_()
+    app.processEvents()  # paint it now, before the heavy imports start
+
+    # Qt copy is up — retire the bootloader's Tk splash underneath.
+    try:
+        import pyi_splash  # exists only inside a frozen build with a Splash target
+
+        pyi_splash.close()
+    except Exception:
+        pass
+    app.processEvents()
+    return splash
+
+
+def _splash_message(splash, text: str) -> None:
+    """Advance the splash status line (no-op when the splash isn't up)."""
+    if splash is None:
+        return
+    splash.setPixmap(
+        _splash_pixmap(splash._aurantium_base, splash._aurantium_dpr, text)
+    )
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.processEvents()
+
+
+def _close_splash(splash, win) -> None:
+    """Drop the splash now that the window is populated."""
+    if splash is not None:
+        splash.finish(win)
+
+
 def _set_windows_app_id() -> None:
     """Give Windows an explicit AppUserModelID so the taskbar treats aurantium
     as its own application — its own icon, its own grouping — instead of
@@ -180,9 +274,14 @@ def main() -> int:
     load_dotenv(EXT_DIR / ".env")
     _set_windows_app_id()
 
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication  # heavy import — Tk splash covers it
 
     app = QApplication(sys.argv)
+    # Qt card over the (still-showing) bootloader splash, then swap — the exe
+    # manifest's DPI awareness keeps both at identical geometry, so the load
+    # shows one continuous centered card from click to dashboard.
+    splash = _show_splash(app)
+
     _migrate_legacy_identity(app)
 
     # Single instance: if aurantium is already running, tell it to surface its
@@ -204,10 +303,12 @@ def main() -> int:
     apply_theme(app)
 
     # Providers first (so panels' initial subscriptions resolve), then panels.
+    _splash_message(splash, "LOADING · PROVIDERS")
     from .providers import register_all_providers
 
     register_all_providers()
 
+    _splash_message(splash, "LOADING · PANELS")
     from .panel import PanelRegistry, discover_panels
 
     # Built-in panels load as a package (frozen-safe); a user's optional
@@ -218,6 +319,7 @@ def main() -> int:
     for err in errors:
         print(f"[aurantium] panel failed to load:\n{err}", file=sys.stderr)
 
+    _splash_message(splash, "LOADING · WORKSPACE")
     from .app import MainWindow
 
     win = MainWindow()
@@ -236,6 +338,7 @@ def main() -> int:
     # The 1500x900 set in MainWindow stays as the restore size.
     win.enter_fullscreen()
 
+    _splash_message(splash, "LOADING · LAYOUT")
     startup_err = ""
     try:
         win.default_startup()
@@ -243,6 +346,9 @@ def main() -> int:
         import traceback as _tb
 
         startup_err = _tb.format_exc()
+
+    # Panels are built and the layout restored — hand off from splash to window.
+    _close_splash(splash, win)
 
     if os.environ.get("AURANTIUM_DEBUG") or startup_err or errors:
         try:

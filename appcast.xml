@@ -20,6 +20,33 @@
     <language>en</language>
 
     <item>
+      <title>Aurantium 1.4.6</title>
+      <description><![CDATA[
+        <style>
+          html, body { background:#ffffff; color:#141414; margin:0;
+                       padding:10px 12px; font-family:'Segoe UI', Arial, sans-serif;
+                       font-size:13px; line-height:1.4; }
+          h3 { margin:0 0 8px; font-size:15px; color:#111111; }
+          ul { margin:0; padding-left:20px; }
+          li { margin:4px 0; }
+        </style>
+        <h3>What&rsquo;s new in 1.4.6</h3>
+        <ul>
+          <li><b>Startup splash:</b> the Aurantium logo now appears the instant you launch and stays on screen &mdash; with a live loading status underneath &mdash; until the dashboard is ready. No more blank seconds after clicking the icon.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Wed, 22 Jul 2026 14:30:35 -0300</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/aurantium/releases/download/v1.4.6/aurantium-setup.exe"
+        sparkle:version="1.4.6"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="75190999"
+        sparkle:edSignature="e/6153j4c8ZjiuWMix0O6CGiTtPWH2hgh2hUyBLLsznCOwjcsjnPNeBuIdEoYc1VRXr3VCSxirlO601R1lQlAw=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>Aurantium 1.4.5</title>
       <description><![CDATA[
         <style>

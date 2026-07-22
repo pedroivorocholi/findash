@@ -29,6 +29,7 @@ for _asset in (
     "aurantium.icns",
     "aurantium_logo.png",
     "aurantium_logo_ondark.png",
+    "aurantium_splash.png",
 ):
     if os.path.exists(_asset):
         datas.append((_asset, "."))
@@ -102,6 +103,47 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# Boot splash: the bootloader shows the logo card near-instantly on launch,
+# before Python even starts; __main__.py swaps it for a Qt copy once Qt is up.
+# Rendered by a minimal Tcl/Tk the bootloader bundles itself — independent of
+# the `tkinter` exclude above. Windows only: PyInstaller does not support
+# Splash on macOS.
+splash = None
+if not IS_MAC and os.path.exists("aurantium_splash.png"):
+    splash = Splash(
+        "aurantium_splash.png",
+        binaries=a.binaries,
+        datas=a.datas,
+        text_pos=None,
+    )
+
+# Declare per-monitor DPI awareness in the exe manifest (PyInstaller's default
+# template plus the dpiAwareness setting). Without it the process starts
+# DPI-unaware, Windows scales the Tk splash up, and the instant Qt flips
+# awareness on the splash visibly shrinks off-center. With it the splash
+# renders 1:1 from the first frame and nothing ever re-scales; Qt sets PMv2
+# itself anyway, so app behavior is unchanged.
+_MANIFEST = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"></supportedOS>
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"></supportedOS>
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"></supportedOS>
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"></supportedOS>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"></supportedOS>
+    </application>
+  </compatibility>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>
+"""
+
 # One-FOLDER build (dist/aurantium/): the exe runs directly from the install
 # dir with its DLLs in _internal/ beside it — no per-launch %TEMP% unpack.
 # That means instant startup and, crucially, a reliable relaunch when the
@@ -110,6 +152,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    *([splash] if splash is not None else []),
     [],
     exclude_binaries=True,
     name="aurantium",
@@ -124,10 +167,12 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=_ICON,
+    manifest=None if IS_MAC else _MANIFEST,
 )
 
 coll = COLLECT(
     exe,
+    *([splash.binaries] if splash is not None else []),
     a.binaries,
     a.datas,
     strip=False,
