@@ -20,6 +20,37 @@
     <language>en</language>
 
     <item>
+      <title>Aurantium 1.5.0 — The Commodities Update</title>
+      <description><![CDATA[
+        <style>
+          html, body { background:#ffffff; color:#141414; margin:0;
+                       padding:10px 12px; font-family:'Segoe UI', Arial, sans-serif;
+                       font-size:13px; line-height:1.4; }
+          h3 { margin:0 0 8px; font-size:15px; color:#111111; }
+          ul { margin:0; padding-left:20px; }
+          li { margin:4px 0; }
+        </style>
+        <h3>1.5.0 &mdash; The Commodities Update</h3>
+        <ul>
+          <li><b>The full commodity universe:</b> 27 markets across Metals, Energy, Agriculture, and a new Livestock category &mdash; Live Cattle, Feeder Cattle, Lean Hogs, Orange Juice, KC Wheat, Oats, Soybean Oil &amp; Meal, Rough Rice, Aluminum and more, everywhere: Commodities, Futures Curve, Positioning History, and Macro/Rates positioning, all with verified live CFTC data.</li>
+          <li><b>Redesigned Edit dialogs:</b> pick instruments by plain-English search (&ldquo;10 year&rdquo;, &ldquo;cattle&rdquo;, &ldquo;euro&rdquo;) instead of typing ticker codes &mdash; with one-click presets, drag-to-reorder rows, and live symbol validation.</li>
+          <li><b>Right-click quick edits:</b> right-click any row, tile, or mini chart to add or remove instruments without opening a dialog. Ctrl+Z undoes any edit.</li>
+          <li><b>Commodities panel:</b> now four groups &mdash; adding a commodity files it into the right group automatically.</li>
+          <li><b>Smarter charts:</b> Positioning History gains a real date axis, 6M/1Y/All range buttons, a marked latest reading, and hover readouts; the Futures Curve shows per-contract prices on hover with a front-month tag; the yield curve shows per-tenor yields on hover. All charts stay clamped to their data &mdash; no more zooming into empty space.</li>
+        </ul>
+      ]]></description>
+      <pubDate>Wed, 22 Jul 2026 17:06:00 -0300</pubDate>
+      <enclosure
+        url="https://github.com/pedroivorocholi/aurantium/releases/download/v1.5.0/aurantium-setup.exe"
+        sparkle:version="1.5.0"
+        sparkle:os="windows"
+        sparkle:installerArguments="/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS"
+        length="76105915"
+        sparkle:edSignature="zvAKnoJKvEYjqqIvkL65dVHiaBxYOLeBulKfjOiQ6lHoLFLM5B9yidr+Kzh1Ryv1YBxJyhbqQBsw9l2qlFvHBg=="
+        type="application/octet-stream" />
+    </item>
+
+    <item>
       <title>Aurantium 1.4.6</title>
       <description><![CDATA[
         <style>
