@@ -12,14 +12,32 @@ from .market_table import (
     make_filter_edit,
     parse_numeric,
 )
+from .symbol_catalog import (
+    FRED_ENTRIES,
+    FX_ENTRIES,
+    INDEX_ENTRIES,
+    SECTOR_ETF_ENTRIES,
+    TENOR_ENTRIES,
+    CatalogEntry,
+    commodity_entries,
+    search_catalog,
+)
 
 __all__ = [
+    "CatalogEntry",
     "EditorColumn",
     "EditorSection",
+    "FRED_ENTRIES",
+    "FX_ENTRIES",
+    "INDEX_ENTRIES",
     "ListEditorDialog",
     "MarketTable",
     "NumericTableWidgetItem",
+    "SECTOR_ETF_ENTRIES",
+    "TENOR_ENTRIES",
+    "commodity_entries",
     "make_filter_edit",
     "open_list_editor",
     "parse_numeric",
+    "search_catalog",
 ]

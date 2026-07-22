@@ -22,9 +22,9 @@ class CommodityMeta(NamedTuple):
     symbol: str       # continuous front-month symbol ("GC=F")
     cftc_market: Optional[str]  # key into the econ provider's CFTC market map
     root: str         # futures contract root ("GC")
-    exchange: str     # Yahoo exchange suffix ("CMX" | "NYM" | "CBT" | "NYB")
+    exchange: str     # Yahoo exchange suffix ("CMX" | "NYM" | "CBT" | "NYB" | "CME")
     months: str       # active delivery-month codes, subset of MONTH_CODES
-    category: str     # "Metals" | "Energy" | "Agriculture"
+    category: str     # "Metals" | "Energy" | "Agriculture" | "Livestock"
 
 
 #: curated curve-capable commodities, grouped by category. Every root's
@@ -37,6 +37,7 @@ COMMODITIES: tuple[CommodityMeta, ...] = (
     CommodityMeta("Copper", "HG=F", "copper", "HG", "CMX", "HKNUZ", "Metals"),
     CommodityMeta("Platinum", "PL=F", "platinum", "PL", "NYM", "FJNV", "Metals"),
     CommodityMeta("Palladium", "PA=F", "palladium", "PA", "NYM", "HMUZ", "Metals"),
+    CommodityMeta("Aluminum", "ALI=F", "aluminum", "ALI", "CMX", MONTH_CODES, "Metals"),
     # -- energy --
     CommodityMeta("Brent Crude", "BZ=F", "brent", "BZ", "NYM", MONTH_CODES, "Energy"),
     CommodityMeta("Henry Hub NatGas", "NG=F", "natgas", "NG", "NYM", MONTH_CODES, "Energy"),
@@ -45,16 +46,26 @@ COMMODITIES: tuple[CommodityMeta, ...] = (
     CommodityMeta("Heating Oil (ULSD)", "HO=F", "heating_oil", "HO", "NYM", MONTH_CODES, "Energy"),
     # -- agriculture --
     CommodityMeta("Wheat (SRW)", "ZW=F", "wheat", "ZW", "CBT", "HKNUZ", "Agriculture"),
+    CommodityMeta("KC Wheat (HRW)", "KE=F", "kc_wheat", "KE", "CBT", "HKNUZ", "Agriculture"),
     CommodityMeta("Corn", "ZC=F", "corn", "ZC", "CBT", "HKNUZ", "Agriculture"),
+    CommodityMeta("Oats", "ZO=F", "oats", "ZO", "CBT", "HKNUZ", "Agriculture"),
     CommodityMeta("Soybeans", "ZS=F", "soybeans", "ZS", "CBT", "FHKNQUX", "Agriculture"),
+    CommodityMeta("Soybean Oil", "ZL=F", "soybean_oil", "ZL", "CBT", "FHKNQUVZ", "Agriculture"),
+    CommodityMeta("Soybean Meal", "ZM=F", "soybean_meal", "ZM", "CBT", "FHKNQUVZ", "Agriculture"),
+    CommodityMeta("Rough Rice", "ZR=F", "rough_rice", "ZR", "CBT", "FHKNUX", "Agriculture"),
     CommodityMeta("Coffee", "KC=F", "coffee", "KC", "NYB", "HKNUZ", "Agriculture"),
     CommodityMeta("Sugar", "SB=F", "sugar", "SB", "NYB", "HKNV", "Agriculture"),
     CommodityMeta("Cocoa", "CC=F", "cocoa", "CC", "NYB", "HKNUZ", "Agriculture"),
     CommodityMeta("Cotton", "CT=F", "cotton", "CT", "NYB", "HKNVZ", "Agriculture"),
+    CommodityMeta("Orange Juice", "OJ=F", "orange_juice", "OJ", "NYB", "FHKNUX", "Agriculture"),
+    # -- livestock --
+    CommodityMeta("Live Cattle", "LE=F", "live_cattle", "LE", "CME", "GJMQVZ", "Livestock"),
+    CommodityMeta("Feeder Cattle", "GF=F", "feeder_cattle", "GF", "CME", "FHJKQUVX", "Livestock"),
+    CommodityMeta("Lean Hogs", "HE=F", "lean_hogs", "HE", "CME", "GJKMNQVZ", "Livestock"),
 )
 
 #: categories in display order (for grouped selectors)
-CATEGORIES = ("Metals", "Energy", "Agriculture")
+CATEGORIES = ("Metals", "Energy", "Agriculture", "Livestock")
 
 _BY_SYMBOL = {c.symbol: c for c in COMMODITIES}
 _BY_MARKET = {c.cftc_market: c for c in COMMODITIES if c.cftc_market}

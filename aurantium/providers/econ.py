@@ -59,6 +59,7 @@ _CFTC_MARKETS = {
     "copper": "COPPER%COMMODITY EXCHANGE INC.",
     "platinum": "PLATINUM - NEW YORK MERCANTILE EXCHANGE",
     "palladium": "PALLADIUM - NEW YORK MERCANTILE EXCHANGE",
+    "aluminum": "ALUMINUM MWP - COMMODITY EXCHANGE INC.",
     # energy
     "crude_oil": "CRUDE OIL, LIGHT SWEET%",
     "brent": "BRENT LAST DAY%",
@@ -71,10 +72,20 @@ _CFTC_MARKETS = {
     "wheat": "WHEAT-SRW - CHICAGO BOARD OF TRADE",
     "corn": "CORN - CHICAGO BOARD OF TRADE",
     "soybeans": "SOYBEANS - CHICAGO BOARD OF TRADE",
+    "kc_wheat": "WHEAT-HRW - CHICAGO BOARD OF TRADE",
+    "oats": "OATS - CHICAGO BOARD OF TRADE",
+    "soybean_oil": "SOYBEAN OIL - CHICAGO BOARD OF TRADE",
+    "soybean_meal": "SOYBEAN MEAL - CHICAGO BOARD OF TRADE",
+    "rough_rice": "ROUGH RICE - CHICAGO BOARD OF TRADE",
     "coffee": "COFFEE C - ICE FUTURES U.S.",
     "sugar": "SUGAR NO. 11 - ICE FUTURES U.S.",
     "cocoa": "COCOA - ICE FUTURES U.S.",
     "cotton": "COTTON NO. 2 - ICE FUTURES U.S.",
+    "orange_juice": "FRZN CONCENTRATED ORANGE JUICE - ICE FUTURES U.S.",
+    # livestock
+    "live_cattle": "LIVE CATTLE - CHICAGO MERCANTILE EXCHANGE",
+    "feeder_cattle": "FEEDER CATTLE - CHICAGO MERCANTILE EXCHANGE",
+    "lean_hogs": "LEAN HOGS - CHICAGO MERCANTILE EXCHANGE",
     # financial
     "sp500": "E-MINI S&P 500%",
     "bitcoin": "BITCOIN%",
