@@ -4,6 +4,7 @@ from .list_editor import (
     EditorColumn,
     EditorSection,
     ListEditorDialog,
+    open_add_picker,
     open_list_editor,
 )
 from .market_table import (
@@ -37,6 +38,7 @@ __all__ = [
     "TENOR_ENTRIES",
     "commodity_entries",
     "make_filter_edit",
+    "open_add_picker",
     "open_list_editor",
     "parse_numeric",
     "search_catalog",
