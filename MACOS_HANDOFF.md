@@ -1,26 +1,35 @@
-# Porting Aurantium to macOS — instructions for your Claude
+# Building & verifying Aurantium on macOS — instructions for your Claude
 
 Aurantium is a PySide6 (Qt) desktop financial terminal. It's Windows-shipped
-today, but the codebase is already largely cross-platform: `aurantium.spec`
-has a macOS `BUNDLE()` target, the app icon exists as `.icns`, all
-Windows-only code paths (`AppUserModelID`, WinSparkle) are already guarded
-behind `sys.platform` checks, and keyboard shortcuts are defined with
-portable `QKeySequence` text/`StandardKey`, which Qt auto-remaps to Cmd on
-macOS (e.g. `"Ctrl+W"` becomes Cmd+W automatically — nothing to translate
-there). A macOS-native auto-updater (`aurantium/updater_mac.py`) and
-mac-appropriate fonts have already been added.
+today, but **the macOS port itself is already done and on `main`** —
+`aurantium.spec` has a macOS `BUNDLE()` target, the app icon exists as
+`.icns`, all Windows-only code paths (`AppUserModelID`, WinSparkle) are
+already guarded behind `sys.platform` checks, keyboard shortcuts are defined
+with portable `QKeySequence` text/`StandardKey` (Qt auto-remaps `"Ctrl+W"` to
+Cmd+W on macOS — nothing to translate there), and a macOS-native auto-updater
+(`aurantium/updater_mac.py`) plus mac-appropriate fonts have been added.
 
-Your job: **build it, run it, verify it, and be the first real test of the
-auto-updater** — none of this has run on actual macOS hardware yet.
+There is no separate "mac codebase" to write or merge — it's one shared
+source tree. **Your job is QA, not porting**: build it, run it, and be the
+first real test of the auto-updater, since none of this has run on actual
+macOS hardware yet. Only if you hit an actual bug does anything need to go
+back into the repo.
+
+You've been added as a **collaborator** (write access) on
+`pedroivorocholi/aurantium` — accept the invite at
+https://github.com/pedroivorocholi/aurantium/invitations if you haven't.
+That means you can push branches directly; no fork needed.
 
 ## 1. Get the code
 
 ```bash
 git clone https://github.com/pedroivorocholi/aurantium.git
-cd aurantium/app
+cd aurantium
 ```
 
-Everything below happens inside `app/`.
+Everything below happens at the repo root (there's no nested `app/` folder —
+the files `BUILD.md`, `RELEASING.md`, `aurantium.spec` etc. describe live
+right here).
 
 ## 2. Set up the environment and build
 
@@ -116,11 +125,24 @@ whatever — that's exactly the kind of bug only real macOS can surface. Fix
 it in `aurantium/updater_mac.py` (it's a single self-contained file) or
 report back what happened.
 
-## 5. Send it back
+## 5. Send it back (only if you changed anything)
 
-Push your fixes as a branch and open a PR against
-`https://github.com/pedroivorocholi/aurantium` (you'll need to fork it
-first, or ask Pedro for collaborator access). Don't push directly to `main`.
+If everything in steps 3-4 worked with zero code changes, there's nothing to
+send back — you're done, and you'll get real auto-updates per step 6 below.
+
+If you *did* fix something (e.g. `updater_mac.py`'s bundle-path detection,
+a Gatekeeper workaround, a font/layout tweak): you have push access, so —
+
+```bash
+git checkout -b macos-fixes
+git add -A
+git commit -m "…what you fixed and why…"
+git push -u origin macos-fixes
+gh pr create --title "macOS fixes" --body "…"
+```
+
+Don't push straight to `main` — open a PR so Pedro can review before it
+ships to Windows users too (it's one shared codebase).
 
 In the PR description, note explicitly:
 - What you tested (panels, shortcuts, tray icon, the updater round-trip).
@@ -128,15 +150,16 @@ In the PR description, note explicitly:
   anything Gatekeeper-related).
 - Whether the auto-update swap-and-relaunch worked cleanly end-to-end.
 
-## 6. Getting future updates (once this is merged and released)
+## 6. Getting future updates (once this is merged)
 
-Once this is merged, Pedro cuts a normal release per `RELEASING.md`
-(§ "4b. macOS" covers the macOS-specific half — building the `.app`,
-zipping it, signing it with the same key used for Windows, adding the
-`sparkle:os="macos"` appcast item, and publishing both platform's assets
-under one GitHub release). After that, your locally-built `aurantium.app`
-checks for updates once a day automatically (silent, only prompts if it
-finds something newer), and you can also trigger it manually any time via
-**Help ▸ Check for Updates…**. No further action needed on your end — it's
-the same appcast feed and signing key as the Windows build, just a
-different (pure-Python) download-and-swap mechanism under the hood.
+Releases are automated now (`.github/workflows/release.yml`, see
+`RELEASING.md` § "Automated releases"): Pedro pushes a version tag, and CI
+builds, signs, and publishes **both** Windows and macOS in one shot — no one
+needs to build on a Mac by hand again after your initial verification pass.
+
+Once a release goes out, your locally-built `aurantium.app` checks for
+updates once a day automatically (silent, only prompts if it finds
+something newer), and you can trigger it manually anytime via
+**Help ▸ Check for Updates…**. Same appcast feed and signing key as the
+Windows build, just a different (pure-Python) download-and-swap mechanism
+under the hood.
